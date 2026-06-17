@@ -7,6 +7,8 @@ interface HeaderProps {
   onNext: () => void
   onToday: () => void
   onViewModeChange: (mode: ViewMode) => void
+  managing?: boolean
+  onManage?: () => void
 }
 
 const modes: { key: ViewMode; label: string }[] = [
@@ -23,6 +25,8 @@ export function Header({
   onNext,
   onToday,
   onViewModeChange,
+  managing = false,
+  onManage = () => {},
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-200">
@@ -55,21 +59,34 @@ export function Header({
           </button>
         </div>
 
-        <nav className="flex gap-0.5 md:gap-1">
-          {modes.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => onViewModeChange(key)}
-              className={`px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
-                viewMode === key
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+        <div className="flex items-center gap-1 md:gap-2">
+          <nav className="flex gap-0.5 md:gap-1">
+            {modes.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => onViewModeChange(key)}
+                className={`px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
+                  viewMode === key
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="w-px h-5 bg-gray-200 hidden md:block" />
+          <button
+            onClick={onManage}
+            className={`px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
+              managing
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            管理
+          </button>
+        </div>
       </div>
     </header>
   )

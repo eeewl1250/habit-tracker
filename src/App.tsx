@@ -6,22 +6,26 @@ import { MobileView } from './components/MobileView'
 import { HeatmapView } from './components/HeatmapView'
 import { StatsView } from './components/StatsView'
 import { TaskForm } from './components/TaskForm'
+import { ManagementPage } from './components/ManagementPage'
 import { useTasks } from './hooks/useTasks'
 import { useLogs } from './hooks/useLogs'
 import { useViewDates } from './hooks/useViewDates'
 import { fetchCategories } from './lib/api'
+import type { Category } from './types'
 
 function App() {
   const tasks = useTasks()
   const logs = useLogs()
   const dates = useViewDates()
   const [showForm, setShowForm] = useState(false)
-  const [categories, setCategories] = useState<string[]>([])
+  const [showManagement, setShowManagement] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
 
-  const allCategories = useMemo(() => {
-    const fromTasks = tasks.tasks.map((t) => t.category).filter(Boolean)
-    return [...new Set([...fromTasks, ...categories])].sort()
-  }, [tasks.tasks, categories])
+  const categoryColor = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of categories) map.set(c.name, c.color)
+    return map
+  }, [categories])
 
   const loadLogs = useCallback(() => {
     logs.load(
@@ -40,6 +44,10 @@ function App() {
 
   const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
 
+  const handleManage = useCallback(() => {
+    setShowManagement((p) => !p)
+  }, [])
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header
@@ -49,65 +57,91 @@ function App() {
         onNext={dates.goNext}
         onToday={dates.goToday}
         onViewModeChange={dates.setViewMode}
+        managing={showManagement}
+        onManage={handleManage}
       />
 
       <main className="max-w-5xl mx-auto">
-        <div className="hidden md:flex justify-end p-4">
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            + タスク追加
-          </button>
-        </div>
-
-        {showForm && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-              <h2 className="text-lg font-bold mb-4">新しいタスク</h2>
-              <TaskForm
-                categories={allCategories}
-                onSave={async (form) => {
-                  await tasks.add(form)
-                  setShowForm(false)
-                }}
-                onCancel={() => setShowForm(false)}
-              />
-            </div>
-          </div>
-        )}
-
-        {dates.viewMode === 'heatmap' && (
-          <HeatmapView tasks={tasks.tasks} />
-        )}
-        {dates.viewMode === 'stats' && <StatsView />}
-
-        {showMatrix && (
+        {showManagement ? (
+          <ManagementPage
+            tasks={tasks.tasks}
+            categories={categories}
+            onAdd={(form) => tasks.add(form)}
+            onEdit={(id, form) => tasks.edit(id, form)}
+            onDelete={(id) => tasks.remove(id)}
+            onRefresh={tasks.reload}
+          />
+        ) : (
           <>
-            <div className="block md:hidden">
-              <MobileView
-                tasks={tasks.tasks}
-                logs={logs}
-                onReloadLogs={loadLogs}
-              />
+            <div className="hidden md:flex justify-end gap-2 p-4">
+              <button
+                onClick={handleManage}
+                className="px-4 py-2 bg-white text-gray-600 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
+              >
+                管理
+              </button>
+              <button
+                onClick={() => setShowForm(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                + タスク追加
+              </button>
             </div>
-            <div className="hidden md:block">
-              <MatrixView
-                tasks={tasks.tasks}
-                days={dates.days}
-                logs={logs}
-              />
-            </div>
+
+            {showForm && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20 p-4">
+                <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+                  <h2 className="text-lg font-bold mb-4">新しいタスク</h2>
+                  <TaskForm
+                    categories={categories}
+                    onSave={async (form) => {
+                      await tasks.add(form)
+                      setShowForm(false)
+                    }}
+                    onCancel={() => setShowForm(false)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {dates.viewMode === 'heatmap' && (
+              <HeatmapView tasks={tasks.tasks} />
+            )}
+            {dates.viewMode === 'stats' && <StatsView />}
+
+            {showMatrix && (
+              <>
+                <div className="block md:hidden">
+                  <MobileView
+                    tasks={tasks.tasks}
+                    logs={logs}
+                    categoryColor={categoryColor}
+                    onReloadLogs={loadLogs}
+                    onManage={handleManage}
+                  />
+                </div>
+                <div className="hidden md:block">
+                  <MatrixView
+                    tasks={tasks.tasks}
+                    days={dates.days}
+                    logs={logs}
+                    categoryColor={categoryColor}
+                  />
+                </div>
+              </>
+            )}
           </>
         )}
       </main>
 
-      <button
-        onClick={() => setShowForm(true)}
-        className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
-      >
-        +
-      </button>
+      {!showManagement && (
+        <button
+          onClick={() => setShowForm(true)}
+          className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
+        >
+          +
+        </button>
+      )}
     </div>
   )
 }

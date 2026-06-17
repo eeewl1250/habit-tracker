@@ -4,11 +4,18 @@ import { ja } from 'date-fns/locale'
 import type { Task, DailyLog } from '../types'
 import { WEEKDAY_MAP } from '../types'
 import { useLogs } from '../hooks/useLogs'
+import { updateLogMemo } from '../lib/api'
 
 interface MobileViewProps {
   tasks: Task[]
   logs: ReturnType<typeof useLogs>
+  categoryColor: Map<string, string>
   onReloadLogs: () => void
+  onManage?: () => void
+}
+
+function getBaseDate(task: Task): Date {
+  return task.base_date ? new Date(task.base_date + 'T00:00:00') : new Date(task.created_at)
 }
 
 function isDayActive(task: Task, date: Date): boolean {
@@ -17,21 +24,20 @@ function isDayActive(task: Task, date: Date): boolean {
     return days.some((k) => WEEKDAY_MAP[k] === date.getDay())
   }
   if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
-    const msPerDay = 86400000
-    const daysSinceEpoch = Math.floor(date.getTime() / msPerDay)
-    return daysSinceEpoch % task.frequency === 0
+    const base = getBaseDate(task)
+    const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
+    return diff >= 0 && diff % task.frequency === 0
   }
   return true
 }
 
-function isCheckedInRange(
-  logsList: DailyLog[], taskId: string, task: Task, date: Date, dateStr: string
-): boolean {
+function isCheckedInRange(logsList: DailyLog[], taskId: string, task: Task, date: Date, dateStr: string): boolean {
   if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
-    const msPerDay = 86400000
-    const daysSinceEpoch = Math.floor(date.getTime() / msPerDay)
-    const startMs = daysSinceEpoch * msPerDay
-    const endMs = startMs + (task.frequency - 1) * msPerDay
+    const base = getBaseDate(task)
+    const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
+    const periodStart = Math.floor(diff / task.frequency) * task.frequency
+    const startMs = base.getTime() + periodStart * 86400000
+    const endMs = startMs + (task.frequency - 1) * 86400000
     return logsList.some((l) => {
       if (l.task_id !== taskId) return false
       const t = new Date(l.date).getTime()
@@ -41,7 +47,116 @@ function isCheckedInRange(
   return logsList.some((l) => l.task_id === taskId && l.date === dateStr)
 }
 
-export function MobileView({ tasks, logs, onReloadLogs }: MobileViewProps) {
+function getLogForDate(logsList: DailyLog[], taskId: string, dateStr: string): DailyLog | undefined {
+  return logsList.find((l) => l.task_id === taskId && l.date === dateStr)
+}
+
+function getLogForPeriod(logsList: DailyLog[], taskId: string, task: Task, date: Date): DailyLog | undefined {
+  if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
+    const base = getBaseDate(task)
+    const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
+    const periodStart = Math.floor(diff / task.frequency) * task.frequency
+    const startMs = base.getTime() + periodStart * 86400000
+    const endMs = startMs + (task.frequency - 1) * 86400000
+    return logsList.find((l) => {
+      if (l.task_id !== taskId) return false
+      const t = new Date(l.date).getTime()
+      return t >= startMs && t <= endMs
+    })
+  }
+  return getLogForDate(logsList, taskId, format(date, 'yyyy-MM-dd'))
+}
+
+function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
+  if (task.category) return categoryColor.get(task.category) ?? '#E8F5E9'
+  return '#E8F5E9'
+}
+
+function TaskCard({ task, checked, log, onToggle, categoryColor }: {
+  task: Task; checked: boolean; log?: DailyLog; onToggle: () => void; categoryColor: Map<string, string>
+}) {
+  const [showMemo, setShowMemo] = useState(false)
+  const [memoText, setMemoText] = useState(log?.memo ?? '')
+
+  const freqInfo = task.period_type === 'frequency' && task.frequency && task.frequency > 1
+    ? { freq: task.frequency, base: getBaseDate(task) }
+    : null
+
+  const handleSaveMemo = async () => {
+    if (log) {
+      await updateLogMemo(log.id, memoText)
+      setShowMemo(false)
+    }
+  }
+
+  return (
+    <div className={`rounded-2xl border-2 transition-all ${
+      checked ? 'border-blue-500 bg-blue-50' : 'border-gray-100 bg-white shadow-sm'
+    }`}>
+      <button
+        onClick={onToggle}
+        className="w-full text-left px-4 py-3.5 active:scale-[0.97] transition-transform"
+      >
+        <div className="flex items-center gap-3.5">
+          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getTaskColor(task, categoryColor) }} />
+          <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+            checked ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+          }`}>
+            {checked && <span className="text-white text-sm font-bold">✓</span>}
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className={`text-[15px] font-medium leading-tight block ${
+              checked ? 'text-blue-700 line-through decoration-2' : 'text-gray-800'
+            }`}>
+              {task.name}
+            </span>
+            {freqInfo && (
+              <span className="text-[11px] text-gray-400 mt-0.5 block">
+                {freqInfo.freq}日ごと
+              </span>
+            )}
+          </div>
+        </div>
+      </button>
+
+      {checked && (
+        <div className="px-4 pb-3 pt-0">
+          {showMemo ? (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={memoText}
+                onChange={(e) => setMemoText(e.target.value)}
+                placeholder="メモを入力..."
+                className="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveMemo()
+                  if (e.key === 'Escape') setShowMemo(false)
+                }}
+              />
+              <button onClick={handleSaveMemo}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg">保存</button>
+            </div>
+          ) : log?.memo ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">{log.memo}</span>
+              <button onClick={() => { setMemoText(log.memo ?? ''); setShowMemo(true) }}
+                className="text-[10px] text-gray-400 hover:text-gray-600">編集</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowMemo(true)}
+              className="text-xs text-gray-400 hover:text-gray-600">
+              + メモを追加
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage = () => {} }: MobileViewProps) {
   const [currentDay, setCurrentDay] = useState(new Date())
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const dateStr = format(currentDay, 'yyyy-MM-dd')
@@ -77,12 +192,12 @@ export function MobileView({ tasks, logs, onReloadLogs }: MobileViewProps) {
     const checked = isCheckedInRange(logs.logs, task.id, task, currentDay, dateStr)
     if (checked) {
       if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
-        const msPerDay = 86400000
-        const dse = Math.floor(currentDay.getTime() / msPerDay)
-        const start = format(new Date(dse * msPerDay), 'yyyy-MM-dd')
-        const end = format(new Date(dse * msPerDay + (task.frequency - 1) * msPerDay), 'yyyy-MM-dd')
+        const base = getBaseDate(task)
+        const diff = Math.round((currentDay.getTime() - base.getTime()) / 86400000)
+        const periodStart = Math.floor(diff / task.frequency) * task.frequency
+        const startStr = format(new Date(base.getTime() + periodStart * 86400000), 'yyyy-MM-dd')
         const existing = logs.logs.find((l) =>
-          l.task_id === task.id && l.date >= start && l.date <= end
+          l.task_id === task.id && l.date === startStr
         )
         if (existing) await logs.undo(existing.id)
       } else {
@@ -93,43 +208,6 @@ export function MobileView({ tasks, logs, onReloadLogs }: MobileViewProps) {
       await logs.check(task.id, dateStr)
     }
     onReloadLogs()
-  }
-
-  const renderTask = (task: Task) => {
-    const active = isDayActive(task, currentDay)
-    const checked = active && isCheckedInRange(logs.logs, task.id, task, currentDay, dateStr)
-
-    return (
-      <button
-        key={task.id}
-        onClick={() => active && toggleCheck(task)}
-        className={`w-full text-left rounded-2xl px-4 py-3.5 transition-all active:scale-[0.97] border-2 ${
-          !active ? 'opacity-30 border-gray-100 bg-gray-50' :
-          checked ? 'border-blue-500 bg-blue-50' : 'border-gray-100 bg-white shadow-sm'
-        }`}
-        disabled={!active}
-      >
-        <div className="flex items-center gap-3.5">
-          <div
-            className={`w-3 h-3 rounded-full flex-shrink-0 ${!active ? 'opacity-0' : ''}`}
-            style={{ backgroundColor: task.color ?? '#E8F5E9' }}
-          />
-          <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-            checked ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
-          }`}>
-            {checked && <span className="text-white text-sm font-bold">✓</span>}
-          </div>
-          <span className={`text-[15px] font-medium leading-tight ${
-            checked ? 'text-blue-700 line-through decoration-2' : 'text-gray-800'
-          }`}>
-            {task.name}
-          </span>
-          {!active && (
-            <span className="text-xs text-gray-400 ml-auto">対象外</span>
-          )}
-        </div>
-      </button>
-    )
   }
 
   return (
@@ -155,6 +233,10 @@ export function MobileView({ tasks, logs, onReloadLogs }: MobileViewProps) {
             className="px-4 py-2 text-gray-600 active:bg-gray-200 rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center text-lg">
             ›
           </button>
+          <button onClick={onManage}
+            className="text-xs text-gray-400 hover:text-gray-600 px-2 min-h-[44px] flex items-center">
+            管理
+          </button>
         </div>
         <div className="px-4 pb-3 max-w-lg mx-auto">
           <div className="flex items-center gap-3">
@@ -172,20 +254,52 @@ export function MobileView({ tasks, logs, onReloadLogs }: MobileViewProps) {
       <div className="px-4 pt-4 space-y-6 max-w-lg mx-auto">
         {grouped.grouped.map(([category, catTasks]) => (
           <section key={category}>
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h3 className="text-sm font-bold text-gray-500 tracking-wide">{category || 'その他'}</h3>
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: categoryColor.get(category) ?? '#E8F5E9' }} />
+              <h3 className="text-sm font-bold text-gray-500 tracking-wide">{category}</h3>
             </div>
             <div className="space-y-2">
-              {catTasks.map(renderTask)}
+              {catTasks.map((task) => {
+                const active = isDayActive(task, currentDay)
+                const log = getLogForPeriod(logs.logs, task.id, task, currentDay)
+                const checked = active && !!log
+                return active ? (
+                  <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor} />
+                ) : (
+                  <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getTaskColor(task, categoryColor) }} />
+                      <div className="w-7 h-7 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                      <span className="text-[15px] font-medium text-gray-800">{task.name}</span>
+                      <span className="text-xs text-gray-400 ml-auto">対象外</span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </section>
         ))}
         {grouped.uncategorized.length > 0 && (
           <section>
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h3 className="text-sm font-bold text-gray-500 tracking-wide">その他</h3>
+            <h3 className="text-sm font-bold text-gray-500 tracking-wide mb-2 px-1">その他</h3>
+            <div className="space-y-2">
+              {grouped.uncategorized.map((task) => {
+                const active = isDayActive(task, currentDay)
+                const log = getLogForPeriod(logs.logs, task.id, task, currentDay)
+                const checked = active && !!log
+                return active ? (
+                  <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor} />
+                ) : (
+                  <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-7 h-7 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                      <span className="text-[15px] font-medium text-gray-800">{task.name}</span>
+                      <span className="text-xs text-gray-400 ml-auto">対象外</span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <div className="space-y-2">{grouped.uncategorized.map(renderTask)}</div>
           </section>
         )}
         {activeTasks.length === 0 && (

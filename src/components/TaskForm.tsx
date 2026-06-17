@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import type { TaskFormData, PeriodType, Task } from '../types'
-import { TASK_COLORS, WEEKDAY_KEYS, WEEKDAY_LABELS } from '../types'
+import { format } from 'date-fns'
+import type { TaskFormData, PeriodType, Task, Category } from '../types'
+import { WEEKDAY_KEYS, WEEKDAY_LABELS } from '../types'
 import { CategoryCombobox } from './CategoryCombobox'
 
 interface TaskFormProps {
   initial?: Task
-  categories: string[]
+  categories: Category[]
   onSave: (data: TaskFormData) => Promise<void>
   onCancel: () => void
 }
@@ -17,7 +18,8 @@ const defaultForm: TaskFormData = {
   period_type: 'frequency',
   frequency: 1,
   weekdays: [],
-  color: TASK_COLORS[0],
+  color: null,
+  base_date: format(new Date(), 'yyyy-MM-dd'),
 }
 
 export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProps) {
@@ -32,7 +34,8 @@ export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProp
       weekdays: initial.weekdays
         ? (JSON.parse(initial.weekdays) as string[])
         : [],
-      color: initial.color ?? TASK_COLORS[0],
+      color: initial.color ?? null,
+      base_date: initial.base_date ?? format(new Date(), 'yyyy-MM-dd'),
     }
   })
   const [saving, setSaving] = useState(false)
@@ -111,25 +114,6 @@ export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProp
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          タスクカラー
-        </label>
-        <div className="flex gap-2 flex-wrap">
-          {TASK_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => update('color', c)}
-              className={`w-8 h-8 rounded-full border-2 transition-all ${
-                form.color === c ? 'border-gray-800 scale-110' : 'border-transparent'
-              }`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
           周期タイプ
         </label>
         <div className="flex gap-4">
@@ -155,18 +139,31 @@ export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProp
       </div>
 
       {form.period_type === 'frequency' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            間隔（X日ごと）
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={form.frequency ?? 1}
-            onChange={(e) => update('frequency', Number(e.target.value))}
-            className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-          />
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              間隔（X日ごと）
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={form.frequency ?? 1}
+              onChange={(e) => update('frequency', Number(e.target.value))}
+              className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              基準日
+            </label>
+            <input
+              type="date"
+              value={form.base_date ?? ''}
+              onChange={(e) => update('base_date', e.target.value || null)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+        </>
       )}
 
       {form.period_type === 'weekday' && (
