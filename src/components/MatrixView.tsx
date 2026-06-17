@@ -209,7 +209,10 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
       const freq = task.frequency!
       const base = getBaseDate(task)
 
-      const groups: { days: Date[]; startIdx: number; partial: boolean }[] = []
+      interface FreqGroup {
+        days: Date[]; startIdx: number; partial: boolean; periodStart: Date; periodEnd: Date
+      }
+      const groups: FreqGroup[] = []
 
       // 先頭の跨ぎグループ（前の期間から続いている）
       const firstDiff = Math.round((days[0].getTime() - base.getTime()) / 86400000)
@@ -217,7 +220,9 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
       if (firstDiff !== firstPeriodStart) {
         const offset = firstDiff - firstPeriodStart
         const span = Math.min(freq - offset, days.length)
-        groups.push({ days: days.slice(0, span), startIdx: 0, partial: true })
+        const ps = new Date(base.getTime() + firstPeriodStart * 86400000)
+        const pe = new Date(ps.getTime() + (freq - 1) * 86400000)
+        groups.push({ days: days.slice(0, span), startIdx: 0, partial: true, periodStart: ps, periodEnd: pe })
       }
 
       // 通常の期間（元のロジックそのまま）
@@ -230,7 +235,9 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
           for (let j = 1; j < freq && i + j < days.length; j++) {
             groupDays.push(days[i + j])
           }
-          groups.push({ days: groupDays, startIdx: i, partial: false })
+          const ps = day
+          const pe = new Date(ps.getTime() + (freq - 1) * 86400000)
+          groups.push({ days: groupDays, startIdx: i, partial: false, periodStart: ps, periodEnd: pe })
           i += freq - 1
         }
       }
@@ -283,7 +290,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
             </div>
             {group.days.length > 1 && (
               <span className="absolute bottom-0.5 text-[9px] text-gray-400">
-                {format(group.days[0], 'd')}-{format(group.days[group.days.length - 1], 'd')}
+                {format(group.periodStart, 'd')}-{format(group.periodEnd, 'd')}
               </span>
             )}
           </div>
