@@ -78,7 +78,7 @@ function App() {
         )}
 
         {dates.viewMode === 'heatmap' && (
-          <HeatmapView tasks={tasks.tasks} logs={logs} />
+          <HeatmapView tasks={tasks.tasks} />
         )}
         {dates.viewMode === 'stats' && <StatsView />}
 

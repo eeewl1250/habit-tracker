@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { format } from 'date-fns'
+import { format, isToday } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import type { Task, DailyLog } from '../types'
 
@@ -47,7 +47,9 @@ export function MatrixView({ tasks, days, logs }: MatrixViewProps) {
       {days.map((day) => (
         <div
           key={day.toISOString()}
-          className={`text-center py-2 border-b border-gray-200 text-xs font-medium sticky top-0 bg-gray-50 z-10 ${dayColors[format(day, 'E', { locale: ja })] ?? 'text-gray-600'}`}
+          className={`text-center py-2 border-b border-gray-200 text-xs font-medium sticky top-0 z-10 ${
+            isToday(day) ? 'bg-blue-100' : 'bg-gray-50'
+          } ${dayColors[format(day, 'E', { locale: ja })] ?? 'text-gray-600'}`}
         >
           <div>{format(day, 'E', { locale: ja })}</div>
           <div className="text-sm">{format(day, 'd')}</div>
@@ -113,7 +115,9 @@ function CategoryGroup({
             return (
               <div
                 key={`${task.id}-${dateStr}`}
-                className="flex items-center justify-center py-2 border-b border-gray-100 bg-white min-w-0"
+                className={`flex items-center justify-center py-2 border-b border-gray-100 min-w-0 ${
+                  isToday(day) ? 'bg-blue-50' : 'bg-white'
+                }`}
               >
                 <input
                   type="checkbox"
