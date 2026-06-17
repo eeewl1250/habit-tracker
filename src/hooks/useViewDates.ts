@@ -20,8 +20,8 @@ export function useViewDates() {
 
   const dateRange = useMemo(() => {
     if (viewMode === 'week' || viewMode === 'heatmap' || viewMode === 'stats') {
-      const start = startOfWeek(baseDate, { weekStartsOn: 0 })
-      const end = endOfWeek(baseDate, { weekStartsOn: 0 })
+      const start = startOfWeek(baseDate, { weekStartsOn: 1 })
+      const end = endOfWeek(baseDate, { weekStartsOn: 1 })
       return { start, end }
     }
     const start = startOfMonth(baseDate)
