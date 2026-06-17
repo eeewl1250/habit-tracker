@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { TaskFormData, PeriodType, Task } from '../types'
+import { TASK_COLORS, WEEKDAY_KEYS, WEEKDAY_LABELS } from '../types'
 import { CategoryCombobox } from './CategoryCombobox'
 
 interface TaskFormProps {
@@ -16,10 +17,8 @@ const defaultForm: TaskFormData = {
   period_type: 'frequency',
   frequency: 1,
   weekdays: [],
+  color: TASK_COLORS[0],
 }
-
-const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土']
-const weekdayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
 export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProps) {
   const [form, setForm] = useState<TaskFormData>(() => {
@@ -33,6 +32,7 @@ export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProp
       weekdays: initial.weekdays
         ? (JSON.parse(initial.weekdays) as string[])
         : [],
+      color: initial.color ?? TASK_COLORS[0],
     }
   })
   const [saving, setSaving] = useState(false)
@@ -111,6 +111,25 @@ export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProp
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
+          タスクカラー
+        </label>
+        <div className="flex gap-2 flex-wrap">
+          {TASK_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => update('color', c)}
+              className={`w-8 h-8 rounded-full border-2 transition-all ${
+                form.color === c ? 'border-gray-800 scale-110' : 'border-transparent'
+              }`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           周期タイプ
         </label>
         <div className="flex gap-4">
@@ -156,7 +175,7 @@ export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProp
             実行する曜日
           </label>
           <div className="flex gap-2">
-            {weekdayKeys.map((key, i) => (
+            {WEEKDAY_KEYS.map((key, i) => (
               <button
                 key={key}
                 type="button"
@@ -167,7 +186,7 @@ export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProp
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {weekdayLabels[i]}
+                {WEEKDAY_LABELS[i]}
               </button>
             ))}
           </div>

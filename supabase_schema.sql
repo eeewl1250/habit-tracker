@@ -7,6 +7,7 @@ CREATE TABLE tasks (
   period_type TEXT NOT NULL DEFAULT 'frequency' CHECK (period_type IN ('frequency', 'weekday')),
   frequency   INTEGER,
   weekdays    TEXT,
+  color       TEXT,
   sort_order  INTEGER NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -36,6 +37,9 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER tasks_updated_at
   BEFORE UPDATE ON tasks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- 既存DBがある場合のマイグレーション（colorカラム追加）
+-- ALTER TABLE tasks ADD COLUMN IF NOT EXISTS color TEXT;
 
 -- RLS: 全員が全データを読み書き（個人利用のため）
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;

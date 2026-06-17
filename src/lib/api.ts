@@ -23,6 +23,7 @@ export async function createTask(form: TaskFormData): Promise<Task> {
         form.period_type === 'weekday'
           ? JSON.stringify(form.weekdays)
           : null,
+      color: form.color,
     })
     .select()
     .single()
@@ -48,6 +49,7 @@ export async function updateTask(
       payload.weekdays = JSON.stringify(form.weekdays)
     }
   }
+  if (form.color !== undefined) payload.color = form.color
 
   const { data, error } = await supabase
     .from('tasks')
