@@ -47,12 +47,14 @@ function App() {
     dates.setViewMode(mode)
   }, [dates])
 
+  const dateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
+
   const loadLogs = useCallback(() => {
     logs.load(
       format(dates.dateRange.start, 'yyyy-MM-dd'),
       format(dates.dateRange.end, 'yyyy-MM-dd')
     )
-  }, [dates.dateRange.start, dates.dateRange.end, logs.load])
+  }, [dateRangeStr, logs.load])
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {})
