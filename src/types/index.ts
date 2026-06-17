@@ -4,9 +4,15 @@ export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes'
 
 export interface Note {
   id: string
+  task_id: string
   content: string
   created_at: string
   updated_at: string
+}
+
+export interface NoteWithTask extends Note {
+  task_name: string
+  task_category: string
 }
 
 export interface Category {

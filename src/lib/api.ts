@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask } from '../types'
 import { CATEGORY_COLOR_PAIRS } from '../types'
 
 // ── Tasks ──
@@ -174,19 +174,27 @@ export async function deleteCategory(name: string): Promise<void> {
 
 // ── Notes ──
 
-export async function fetchNotes(): Promise<Note[]> {
+export async function fetchNotesWithTasks(): Promise<NoteWithTask[]> {
   const { data, error } = await supabase
     .from('notes')
-    .select('*')
-    .order('updated_at', { ascending: false })
+    .select('*, tasks(name, category)')
+    .order('created_at', { ascending: false })
   if (error) throw error
-  return data ?? []
+  return (data ?? []).map((n: any) => ({
+    id: n.id,
+    task_id: n.task_id,
+    content: n.content,
+    created_at: n.created_at,
+    updated_at: n.updated_at,
+    task_name: n.tasks?.name ?? '(削除済み)',
+    task_category: n.tasks?.category ?? '',
+  }))
 }
 
-export async function createNote(content: string): Promise<Note> {
+export async function createNote(taskId: string, content: string): Promise<Note> {
   const { data, error } = await supabase
     .from('notes')
-    .insert({ content })
+    .insert({ task_id: taskId, content })
     .select()
     .single()
   if (error) throw error

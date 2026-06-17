@@ -17,6 +17,7 @@ interface MatrixViewProps {
   }
   categoryColor: Map<string, string>
   categoryBgColor: Map<string, string>
+  onChecked?: (taskId: string, taskName: string) => void
 }
 
 const dayColors: Record<string, string> = {
@@ -126,7 +127,7 @@ function MemoIcon({ log, onMemoUpdate }: { log?: DailyLog; onMemoUpdate: () => v
   )
 }
 
-export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor }: MatrixViewProps) {
+export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, onChecked }: MatrixViewProps) {
   const grouped = useMemo(() => {
     const active = tasks.filter((t) => t.status === 'active')
     const map = new Map<string, Task[]>()
@@ -233,6 +234,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor }
           await logs.undo(existing.id)
         } else {
           await logs.check(task.id, s)
+          onChecked?.(task.id, task.name)
         }
       }
 
@@ -296,7 +298,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor }
             <input type="checkbox" checked={checked}
               onChange={async () => {
                 if (checked) { const id = logs.getLogId(task.id, dateStr); if (id) await logs.undo(id) }
-                else await logs.check(task.id, dateStr)
+                else { await logs.check(task.id, dateStr); onChecked?.(task.id, task.name) }
               }}
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
             {checked && <MemoIcon log={log} onMemoUpdate={() => {}} />}

@@ -8,6 +8,8 @@ import { StatsView } from './components/StatsView'
 import { NotesView } from './components/NotesView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
+import { Toast } from './components/Toast'
+import { NoteModal } from './components/NoteModal'
 import { useTasks } from './hooks/useTasks'
 import { useLogs } from './hooks/useLogs'
 import { useViewDates } from './hooks/useViewDates'
@@ -21,6 +23,11 @@ function App() {
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
+  const [toastMsg, setToastMsg] = useState('')
+  const [toastKey, setToastKey] = useState(0)
+  const [pendingNote, setPendingNote] = useState<{ taskId: string; taskName: string } | null>(null)
+  const [notePrompt, setNotePrompt] = useState<{ taskId: string; taskName: string } | null>(null)
+  const [noteRefreshKey, setNoteRefreshKey] = useState(0)
 
   const categoryColor = useMemo(() => {
     const map = new Map<string, string>()
@@ -67,6 +74,12 @@ function App() {
 
   const handleManage = useCallback(() => {
     setShowManagement((p) => !p)
+  }, [])
+
+  const handleChecked = useCallback((taskId: string, taskName: string) => {
+    setToastMsg(`「${taskName}」を記録しました`)
+    setToastKey((k) => k + 1)
+    setPendingNote({ taskId, taskName })
   }, [])
 
   return (
@@ -132,7 +145,8 @@ function App() {
             {dates.viewMode === 'stats' && (
               <StatsView tasks={tasks.tasks} categoryColor={categoryColor} />
             )}
-            {dates.viewMode === 'notes' && <NotesView />}
+            {dates.viewMode === 'notes' &&
+              <NotesView key={noteRefreshKey} categories={categories} categoryColor={categoryColor} />}
 
             {showMatrix && (
               <>
@@ -143,6 +157,7 @@ function App() {
                     categoryColor={categoryColor}
                     onReloadLogs={loadLogs}
                     onManage={handleManage}
+                    onChecked={handleChecked}
                   />
                 </div>
                 <div className="hidden md:block">
@@ -152,6 +167,7 @@ function App() {
                     logs={logs}
                     categoryColor={categoryColor}
                     categoryBgColor={categoryBgColor}
+                    onChecked={handleChecked}
                   />
                 </div>
               </>
@@ -167,6 +183,29 @@ function App() {
         >
           +
         </button>
+      )}
+
+      <Toast
+        key={toastKey}
+        message={toastMsg}
+        visible={!!toastMsg}
+        onClose={() => { setToastMsg(''); setPendingNote(null) }}
+        onClick={() => {
+          if (pendingNote) {
+            setNotePrompt(pendingNote)
+            setPendingNote(null)
+          }
+          setToastMsg('')
+        }}
+      />
+
+      {notePrompt && (
+        <NoteModal
+          taskId={notePrompt.taskId}
+          taskName={notePrompt.taskName}
+          onClose={() => setNotePrompt(null)}
+          onSaved={() => setNoteRefreshKey((k) => k + 1)}
+        />
       )}
     </div>
   )

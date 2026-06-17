@@ -11,6 +11,7 @@ interface MobileViewProps {
   categoryColor: Map<string, string>
   onReloadLogs: () => void
   onManage?: () => void
+  onChecked?: (taskId: string, taskName: string) => void
 }
 
 function getBaseDate(task: Task): Date {
@@ -156,7 +157,7 @@ function TaskCard({ task, checked, log, onToggle, categoryColor }: {
   )
 }
 
-export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage = () => {} }: MobileViewProps) {
+export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage = () => {}, onChecked }: MobileViewProps) {
   const [currentDay, setCurrentDay] = useState(new Date())
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const dateStr = format(currentDay, 'yyyy-MM-dd')
@@ -205,6 +206,7 @@ export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage 
       }
     } else {
       await logs.check(task.id, dateStr)
+      onChecked?.(task.id, task.name)
     }
     onReloadLogs()
   }

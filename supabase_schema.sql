@@ -63,9 +63,10 @@ CREATE POLICY "allow_all" ON tasks USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON daily_logs USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON categories USING (true) WITH CHECK (true);
 
--- メモ機能
+-- メモ機能（タスクチェックイン後の記録）
 CREATE TABLE IF NOT EXISTS notes (
   id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  task_id    TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   content    TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

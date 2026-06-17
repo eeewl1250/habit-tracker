@@ -1,19 +1,20 @@
-import { useState, useEffect, useRef } from 'react'
-import type { Note } from '../types'
-import { fetchNotes, createNote, updateNote, deleteNote } from '../lib/api'
+import { useState, useEffect, useMemo } from 'react'
+import type { NoteWithTask, Category } from '../types'
+import { fetchNotesWithTasks, deleteNote } from '../lib/api'
 
-export function NotesView() {
-  const [notes, setNotes] = useState<Note[]>([])
+interface NotesViewProps {
+  categories: Category[]
+  categoryColor: Map<string, string>
+}
+
+export function NotesView({ categories, categoryColor }: NotesViewProps) {
+  const [notes, setNotes] = useState<NoteWithTask[]>([])
   const [loading, setLoading] = useState(true)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editText, setEditText] = useState('')
-  const [newText, setNewText] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const load = async () => {
     try {
-      const data = await fetchNotes()
+      const data = await fetchNotesWithTasks()
       setNotes(data)
     } catch (e) {
       console.error(e)
@@ -23,30 +24,6 @@ export function NotesView() {
   }
 
   useEffect(() => { load() }, [])
-
-  const handleAdd = async () => {
-    const text = newText.trim()
-    if (!text) return
-    try {
-      await createNote(text)
-      setNewText('')
-      await load()
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const handleEdit = async (id: string) => {
-    const text = editText.trim()
-    if (!text) return
-    try {
-      await updateNote(id, text)
-      setEditingId(null)
-      await load()
-    } catch (e) {
-      console.error(e)
-    }
-  }
 
   const handleDelete = async (id: string) => {
     try {
@@ -58,10 +35,31 @@ export function NotesView() {
     }
   }
 
-  const startEdit = (note: Note) => {
-    setEditingId(note.id)
-    setEditText(note.content)
-    setTimeout(() => textareaRef.current?.focus(), 0)
+  const grouped = useMemo(() => {
+    const map = new Map<string, NoteWithTask[]>()
+    const uncategorized: NoteWithTask[] = []
+
+    for (const n of notes) {
+      const cat = n.task_category || ''
+      if (cat) {
+        if (!map.has(cat)) map.set(cat, [])
+        map.get(cat)!.push(n)
+      } else {
+        uncategorized.push(n)
+      }
+    }
+
+    const catNames = categories.map((c) => c.name)
+    const sorted = [...map.entries()].sort(
+      ([a], [b]) => catNames.indexOf(a) - catNames.indexOf(b)
+    )
+
+    return { grouped: sorted, uncategorized }
+  }, [notes, categories])
+
+  const formatDate = (d: string) => {
+    const date = new Date(d)
+    return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
   }
 
   if (loading) {
@@ -69,82 +67,78 @@ export function NotesView() {
   }
 
   return (
-    <div className="p-4 max-w-2xl mx-auto space-y-4 pb-24">
-      <div className="flex items-center gap-2">
-        <textarea
-          value={newText}
-          onChange={(e) => setNewText(e.target.value)}
-          placeholder="新しいメモを入力..."
-          rows={2}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={handleAdd}
-          disabled={!newText.trim()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors self-end"
-        >
-          追加
-        </button>
-      </div>
-
+    <div className="p-4 max-w-2xl mx-auto space-y-6 pb-24">
       {notes.length === 0 && (
-        <p className="text-center text-gray-400 py-8">メモはまだありません</p>
+        <p className="text-center text-gray-400 py-8">
+          タスクを完了すると、右下にメモ入力の案内が表示されます
+        </p>
       )}
 
-      <div className="space-y-3">
-        {notes.map((note) =>
-          editingId === note.id ? (
-            <div key={note.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
-              <textarea
-                ref={textareaRef}
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => handleEdit(note.id)}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
-                >
-                  保存
-                </button>
-                <button
-                  onClick={() => setEditingId(null)}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  キャンセル
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div key={note.id} className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 whitespace-pre-wrap text-sm text-gray-800 leading-relaxed min-w-0">
-                  {note.content}
+      {grouped.grouped.map(([category, catNotes]) => {
+        const color = categoryColor.get(category) ?? '#4CAF50'
+        return (
+          <section key={category}>
+            <h3 className="text-sm font-bold mb-3" style={{ color }}>
+              {category}
+              <span className="text-xs text-gray-400 ml-2 font-normal">{catNotes.length}</span>
+            </h3>
+            <div className="space-y-2">
+              {catNotes.map((note) => (
+                <div key={note.id}
+                  className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-400 mb-1">
+                        {note.task_name}
+                        <span className="mx-1">·</span>
+                        {formatDate(note.created_at)}
+                      </div>
+                      <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                        {note.content}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setConfirmDelete(note.id)}
+                      className="text-xs text-red-400 hover:text-red-600 px-1 flex-shrink-0"
+                    >
+                      削除
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => startEdit(note)}
-                    className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1"
-                  >
-                    編集
-                  </button>
+              ))}
+            </div>
+          </section>
+        )
+      })}
+
+      {grouped.uncategorized.length > 0 && (
+        <section>
+          <h3 className="text-sm font-bold text-gray-500 mb-3">その他</h3>
+          <div className="space-y-2">
+            {grouped.uncategorized.map((note) => (
+              <div key={note.id}
+                className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-400 mb-1">
+                      {note.task_name} · {formatDate(note.created_at)}
+                    </div>
+                    <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                      {note.content}
+                    </div>
+                  </div>
                   <button
                     onClick={() => setConfirmDelete(note.id)}
-                    className="text-xs text-red-400 hover:text-red-600 px-2 py-1"
+                    className="text-xs text-red-400 hover:text-red-600 px-1 flex-shrink-0"
                   >
                     削除
                   </button>
                 </div>
               </div>
-              <div className="text-[10px] text-gray-400 mt-2">
-                {new Date(note.updated_at).toLocaleString('ja-JP')}
-              </div>
-            </div>
-          )
-        )}
-      </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20 p-4">
