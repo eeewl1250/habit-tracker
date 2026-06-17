@@ -5,6 +5,7 @@ import { MatrixView } from './components/MatrixView'
 import { MobileView } from './components/MobileView'
 import { HeatmapView } from './components/HeatmapView'
 import { StatsView } from './components/StatsView'
+import { NotesView } from './components/NotesView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { useTasks } from './hooks/useTasks'
@@ -128,7 +129,10 @@ function App() {
             {dates.viewMode === 'heatmap' && (
               <HeatmapView tasks={tasks.tasks} categoryColor={categoryColor} />
             )}
-            {dates.viewMode === 'stats' && <StatsView />}
+            {dates.viewMode === 'stats' && (
+              <StatsView tasks={tasks.tasks} categoryColor={categoryColor} />
+            )}
+            {dates.viewMode === 'notes' && <NotesView />}
 
             {showMatrix && (
               <>

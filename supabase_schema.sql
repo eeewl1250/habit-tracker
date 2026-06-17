@@ -62,3 +62,14 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all" ON tasks USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON daily_logs USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON categories USING (true) WITH CHECK (true);
+
+-- メモ機能
+CREATE TABLE IF NOT EXISTS notes (
+  id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  content    TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON notes USING (true) WITH CHECK (true);

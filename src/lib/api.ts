@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note } from '../types'
 import { CATEGORY_COLOR_PAIRS } from '../types'
 
 // ── Tasks ──
@@ -169,5 +169,42 @@ export async function deleteCategory(name: string): Promise<void> {
     .from('tasks')
     .update({ category: null })
     .eq('category', name)
+  if (error) throw error
+}
+
+// ── Notes ──
+
+export async function fetchNotes(): Promise<Note[]> {
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .order('updated_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createNote(content: string): Promise<Note> {
+  const { data, error } = await supabase
+    .from('notes')
+    .insert({ content })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateNote(id: string, content: string): Promise<void> {
+  const { error } = await supabase
+    .from('notes')
+    .update({ content, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('notes')
+    .delete()
+    .eq('id', id)
   if (error) throw error
 }

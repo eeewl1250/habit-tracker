@@ -16,6 +16,7 @@ const modes: { key: ViewMode; label: string }[] = [
   { key: 'month', label: '月' },
   { key: 'heatmap', label: '🔥' },
   { key: 'stats', label: '📊' },
+  { key: 'notes', label: '📝' },
 ]
 
 export function Header({

@@ -1,6 +1,13 @@
 export type PeriodType = 'frequency' | 'weekday'
 export type TaskStatus = 'active' | 'disabled'
-export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats'
+export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes'
+
+export interface Note {
+  id: string
+  content: string
+  created_at: string
+  updated_at: string
+}
 
 export interface Category {
   name: string
