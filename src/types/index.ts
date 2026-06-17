@@ -19,7 +19,7 @@ export interface Category {
   name: string
   color: string
   bg_color: string
-  sort_order: number
+  sort_order?: number
 }
 
 export interface Task {

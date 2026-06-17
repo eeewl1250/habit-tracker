@@ -124,17 +124,17 @@ export async function fetchCategories(): Promise<Category[]> {
   if (taskErr) throw taskErr
   const names = [...new Set(taskData.map((r) => r.category).filter(Boolean))]
   if (names.length === 0) return []
-  const defaults: Category[] = names.map((name, i) => {
+  const defaults = names.map((name, i) => {
     const pair = CATEGORY_COLOR_PAIRS[i % CATEGORY_COLOR_PAIRS.length]
-    return { name, color: pair.dot, bg_color: pair.bg, sort_order: i }
-  })
+    return { name, color: pair.dot, bg_color: pair.bg }
+  }) as Category[]
   await supabase.from('categories').upsert(defaults)
   return defaults
 }
 
 export async function createCategory(name: string, color: string): Promise<void> {
   const pair = CATEGORY_COLOR_PAIRS.find((p) => p.dot === color) ?? CATEGORY_COLOR_PAIRS[0]
-  const { error } = await supabase.from('categories').upsert({ name, color, bg_color: pair.bg, sort_order: 0 })
+  const { error } = await supabase.from('categories').upsert({ name, color, bg_color: pair.bg })
   if (error) throw error
 }
 
