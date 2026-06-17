@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { format } from 'date-fns'
+import { format, subDays, addDays } from 'date-fns'
 import { Header } from './components/Header'
 import { MatrixView } from './components/MatrixView'
 import { MobileView } from './components/MobileView'
@@ -50,8 +50,8 @@ function App() {
 
   const loadLogs = useCallback(() => {
     logs.load(
-      format(dates.dateRange.start, 'yyyy-MM-dd'),
-      format(dates.dateRange.end, 'yyyy-MM-dd')
+      format(subDays(dates.dateRange.start, 31), 'yyyy-MM-dd'),
+      format(addDays(dates.dateRange.end, 31), 'yyyy-MM-dd')
     )
   }, [dateRangeStr, logs.load])
 

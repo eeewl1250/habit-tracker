@@ -271,18 +271,18 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
       }
 
       const logsList = logs.logs
-      const getLogForGroup = (groupDays: Date[]): DailyLog | undefined => {
-        const s = format(groupDays[0], 'yyyy-MM-dd')
-        const e = format(groupDays[groupDays.length - 1], 'yyyy-MM-dd')
+      const getLogForGroup = (g: FreqGroup): DailyLog | undefined => {
+        const s = format(g.periodStart, 'yyyy-MM-dd')
+        const e = format(g.periodEnd, 'yyyy-MM-dd')
         return getLogInRange(logsList, task.id, s, e)
       }
-      const isGroupChecked = (groupDays: Date[]): boolean => {
-        const s = format(groupDays[0], 'yyyy-MM-dd')
-        const e = format(groupDays[groupDays.length - 1], 'yyyy-MM-dd')
+      const isGroupChecked = (g: FreqGroup): boolean => {
+        const s = format(g.periodStart, 'yyyy-MM-dd')
+        const e = format(g.periodEnd, 'yyyy-MM-dd')
         return isCheckedInRange(logsList, task.id, s, e)
       }
-      const toggleGroup = async (groupDays: Date[]) => {
-        const s = format(groupDays[0], 'yyyy-MM-dd')
+      const toggleGroup = async (g: FreqGroup) => {
+        const s = format(g.periodStart, 'yyyy-MM-dd')
         const existing = getLogInRange(logsList, task.id, s, s)
         if (existing) {
           await logs.undo(existing.id)
@@ -293,8 +293,8 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
       }
 
       groups.forEach((group, gi) => {
-        const checked = isGroupChecked(group.days)
-        const log = getLogForGroup(group.days)
+        const checked = isGroupChecked(group)
+        const log = getLogForGroup(group)
         const firstDay = group.days[0]
         const today = isToday(firstDay)
         const span = group.days.length
@@ -310,7 +310,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
             }`} />
             <div className="relative flex items-center gap-1">
               <input type="checkbox" checked={checked}
-                onChange={() => toggleGroup(group.days)}
+                onChange={() => toggleGroup(group)}
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
               {checked && log && (
                 <MemoIcon log={log} onMemoUpdate={() => {}} />
