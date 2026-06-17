@@ -148,6 +148,42 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
 
   const colCount = 1 + days.length
 
+  const [nameColWidth, setNameColWidth] = useState<number>(() => {
+    const v = localStorage.getItem('matrix_name_col_width')
+    return v ? Number(v) : 160
+  })
+
+  const [dragging, setDragging] = useState(false)
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging || !dragRef.current) return
+      const delta = e.clientX - dragRef.current.startX
+      const next = Math.max(80, Math.min(600, dragRef.current.startWidth + delta))
+      setNameColWidth(next)
+    }
+    const onUp = () => {
+      if (dragging) {
+        localStorage.setItem('matrix_name_col_width', String(nameColWidth))
+        setDragging(false)
+        dragRef.current = null
+      }
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [dragging, nameColWidth])
+
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault()
+    dragRef.current = { startX: e.clientX, startWidth: nameColWidth }
+    setDragging(true)
+  }
+
   const cells: React.ReactNode[] = []
 
   // Header row
@@ -195,7 +231,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
         className="flex items-center gap-1.5 px-3 py-2 border-b border-r border-gray-100 bg-white sticky left-0 z-10 min-w-0"
         style={{ gridColumn: 1, gridRow: row }}>
         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-        <span className="text-gray-800 font-medium truncate text-sm">{task.name}</span>
+        <span className="text-gray-800 font-medium truncate text-sm" title={task.name}>{task.name}</span>
         {noteTaskIds?.has(task.id) && (
           <button onClick={(e) => { e.stopPropagation(); onViewNotes?.(task.id) }}
             className="text-xs text-blue-400 hover:text-blue-600 flex-shrink-0 ml-auto" title="メモを見る">
@@ -365,12 +401,21 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto relative">
       <div
         className="grid gap-0 text-sm"
-        style={{ gridTemplateColumns: `160px repeat(${days.length}, minmax(36px, 1fr))` }}
+        style={{ gridTemplateColumns: `${nameColWidth}px repeat(${days.length}, minmax(36px, 1fr))` }}
       >
         {cells}
+      </div>
+      {/* Vertical resizer */}
+      <div
+        onMouseDown={startDrag}
+        style={{ left: nameColWidth - 4, top: 0, bottom: 0 }}
+        className={`absolute z-40 w-8 cursor-col-resize`}
+        aria-hidden
+      >
+        <div className="h-full w-0.5 bg-gray-300 mx-auto" />
       </div>
     </div>
   )
