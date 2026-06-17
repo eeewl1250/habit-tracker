@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import type { TaskFormData, PeriodType, Task } from '../types'
+import { CategoryCombobox } from './CategoryCombobox'
 
 interface TaskFormProps {
   initial?: Task
+  categories: string[]
   onSave: (data: TaskFormData) => Promise<void>
   onCancel: () => void
 }
@@ -19,7 +21,7 @@ const defaultForm: TaskFormData = {
 const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土']
 const weekdayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
-export function TaskForm({ initial, onSave, onCancel }: TaskFormProps) {
+export function TaskForm({ initial, categories, onSave, onCancel }: TaskFormProps) {
   const [form, setForm] = useState<TaskFormData>(() => {
     if (!initial) return defaultForm
     return {
@@ -100,12 +102,10 @@ export function TaskForm({ initial, onSave, onCancel }: TaskFormProps) {
         <label className="block text-sm font-medium text-gray-700 mb-1">
           カテゴリ
         </label>
-        <input
-          type="text"
+        <CategoryCombobox
           value={form.category}
-          onChange={(e) => update('category', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-          placeholder="例: 生活, 就活"
+          options={categories}
+          onChange={(val) => update('category', val)}
         />
       </div>
 

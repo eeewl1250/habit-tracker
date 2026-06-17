@@ -87,6 +87,16 @@ export async function checkIn(taskId: string, date: string): Promise<DailyLog> {
   return data
 }
 
+export async function fetchCategories(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('category')
+    .neq('category', '')
+    .order('category', { ascending: true })
+  if (error) throw error
+  return [...new Set(data.map((r) => r.category).filter(Boolean))]
+}
+
 export async function undoCheckIn(id: string): Promise<void> {
   const { error } = await supabase.from('daily_logs').delete().eq('id', id)
   if (error) throw error

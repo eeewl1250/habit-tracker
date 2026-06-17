@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { format } from 'date-fns'
 import { Header } from './components/Header'
 import { MatrixView } from './components/MatrixView'
@@ -9,12 +9,19 @@ import { TaskForm } from './components/TaskForm'
 import { useTasks } from './hooks/useTasks'
 import { useLogs } from './hooks/useLogs'
 import { useViewDates } from './hooks/useViewDates'
+import { fetchCategories } from './lib/api'
 
 function App() {
   const tasks = useTasks()
   const logs = useLogs()
   const dates = useViewDates()
   const [showForm, setShowForm] = useState(false)
+  const [categories, setCategories] = useState<string[]>([])
+
+  const allCategories = useMemo(() => {
+    const fromTasks = tasks.tasks.map((t) => t.category).filter(Boolean)
+    return [...new Set([...fromTasks, ...categories])].sort()
+  }, [tasks.tasks, categories])
 
   const loadLogs = useCallback(() => {
     logs.load(
@@ -22,6 +29,10 @@ function App() {
       format(dates.dateRange.end, 'yyyy-MM-dd')
     )
   }, [dates.dateRange.start, dates.dateRange.end])
+
+  useEffect(() => {
+    fetchCategories().then(setCategories).catch(() => {})
+  }, [])
 
   useEffect(() => {
     loadLogs()
@@ -55,6 +66,7 @@ function App() {
             <div className="bg-white rounded-2xl p-6 w-full max-w-md">
               <h2 className="text-lg font-bold mb-4">新しいタスク</h2>
               <TaskForm
+                categories={allCategories}
                 onSave={async (form) => {
                   await tasks.add(form)
                   setShowForm(false)
