@@ -147,11 +147,14 @@ export async function updateCategoriesOrder(names: string[]): Promise<void> {
 }
 
 export async function updateTasksOrder(ids: string[]): Promise<void> {
-  const updates = ids.map((id, i) => ({ id, sort_order: i }))
-  const { error } = await supabase
-    .from('tasks')
-    .upsert(updates, { onConflict: 'id' })
-  if (error) throw error
+  // Update sort_order for each task by id (use individual UPDATEs to avoid accidental inserts)
+  for (let i = 0; i < ids.length; i++) {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ sort_order: i })
+      .eq('id', ids[i])
+    if (error) throw error
+  }
 }
 
 export async function updateCategoryColor(name: string, color: string, bg_color: string): Promise<void> {
