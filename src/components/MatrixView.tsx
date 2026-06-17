@@ -210,17 +210,29 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
       const base = getBaseDate(task)
 
       const groups: { days: Date[]; startIdx: number; partial: boolean }[] = []
-      let i = 0
-      while (i < days.length) {
-        const diff = Math.round((days[i].getTime() - base.getTime()) / 86400000)
+
+      // 先頭の跨ぎグループ（前の期間から続いている）
+      const firstDiff = Math.round((days[0].getTime() - base.getTime()) / 86400000)
+      const firstPeriodStart = getPeriodStart(firstDiff, freq)
+      if (firstDiff !== firstPeriodStart) {
+        const offset = firstDiff - firstPeriodStart
+        const span = Math.min(freq - offset, days.length)
+        groups.push({ days: days.slice(0, span), startIdx: 0, partial: true })
+      }
+
+      // 通常の期間（元のロジックそのまま）
+      for (let i = groups.length > 0 ? groups[0].days.length : 0; i < days.length; i++) {
+        const day = days[i]
+        const diff = Math.round((day.getTime() - base.getTime()) / 86400000)
         const periodStart = getPeriodStart(diff, freq)
-        const span = Math.min(freq, days.length - i)
         if (diff === periodStart) {
-          groups.push({ days: days.slice(i, i + span), startIdx: i, partial: false })
-        } else {
-          groups.push({ days: days.slice(i, i + span), startIdx: i, partial: true })
+          const groupDays = [day]
+          for (let j = 1; j < freq && i + j < days.length; j++) {
+            groupDays.push(days[i + j])
+          }
+          groups.push({ days: groupDays, startIdx: i, partial: false })
+          i += freq - 1
         }
-        i += span
       }
 
       const logsList = logs.logs
