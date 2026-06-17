@@ -8,7 +8,6 @@ import {
   getDay,
 } from 'date-fns'
 import type { Task } from '../types'
-import { WEEKDAY_MAP } from '../types'
 import { fetchLogs } from '../lib/api'
 
 interface HeatmapViewProps {
@@ -17,23 +16,6 @@ interface HeatmapViewProps {
 }
 
 const dayOrder = [1, 2, 3, 4, 5, 6, 0]
-
-function getBaseDate(task: Task): Date {
-  return task.base_date ? new Date(task.base_date + 'T00:00:00') : new Date(task.created_at)
-}
-
-function isDayActiveForTask(task: Task, date: Date): boolean {
-  if (task.period_type === 'weekday' && task.weekdays) {
-    const days: string[] = JSON.parse(task.weekdays)
-    return days.some((k) => WEEKDAY_MAP[k] === date.getDay())
-  }
-  if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
-    const base = getBaseDate(task)
-    const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
-    return diff >= 0 && diff % task.frequency === 0
-  }
-  return true
-}
 
 function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
   if (task.category) return categoryColor.get(task.category) ?? '#4CAF50'
@@ -98,20 +80,8 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
     }
   }, [activeTasks])
 
-  const calcStats = (task: Task, doneDates: Set<string>) => {
-    const completed = doneDates.size
-    let total = 0
-
-    if (task.period_type === 'weekday' && task.weekdays) {
-      const days: string[] = JSON.parse(task.weekdays)
-      total = yearDays.filter((d) => days.some((k) => WEEKDAY_MAP[k] === d.getDay())).length
-    } else if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
-      total = yearDays.filter((d) => isDayActiveForTask(task, d)).length
-    } else {
-      total = yearDays.length
-    }
-
-    return { completed, total }
+  const calcStats = (doneDates: Set<string>) => {
+    return { completed: doneDates.size, total: 365 }
   }
 
   if (activeTasks.length === 0) {
@@ -125,7 +95,7 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
   const renderTask = (task: Task) => {
     const doneDates = yearLogs[task.id] ?? new Set()
     const color = getTaskColor(task, categoryColor)
-    const stats = calcStats(task, doneDates)
+    const stats = calcStats(doneDates)
 
     return (
       <div key={task.id}>
@@ -135,7 +105,7 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
             {task.name}
           </span>
           <span className="text-xs text-gray-400">
-            {stats.completed}回/{stats.total}日
+            {stats.completed}日/{stats.total}
           </span>
         </div>
         <div className="flex gap-0.5">
@@ -182,12 +152,6 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
           <div className="space-y-5">{grouped.uncategorized.map(renderTask)}</div>
         </section>
       )}
-      <div className="flex items-center gap-2 text-xs text-gray-500">
-        <span>未完了</span>
-        <div className="w-3 h-3 rounded-sm bg-gray-100" />
-        <div className="w-3 h-3 rounded-sm bg-green-500" />
-        <span>完了</span>
-      </div>
     </div>
   )
 }

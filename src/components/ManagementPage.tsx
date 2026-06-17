@@ -53,6 +53,9 @@ export function ManagementPage({
 
   const grouped = useMemo(() => {
     const map = new Map<string, Task[]>()
+    for (const c of categories) {
+      if (!map.has(c.name)) map.set(c.name, [])
+    }
     const uncategorized: Task[] = []
     for (const t of activeTasks) {
       if (t.category) {
@@ -66,7 +69,7 @@ export function ManagementPage({
       grouped: [...map.entries()].sort(([a], [b]) => a.localeCompare(b)),
       uncategorized,
     }
-  }, [activeTasks])
+  }, [activeTasks, categories])
 
   const handleDeleteTask = async (id: string) => {
     try {
