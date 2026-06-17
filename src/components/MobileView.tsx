@@ -12,8 +12,6 @@ interface MobileViewProps {
   onReloadLogs: () => void
   onManage?: () => void
   onChecked?: (taskId: string, taskName: string) => void
-  noteTaskIds?: Set<string>
-  onViewNotes?: (taskId: string) => void
 }
 
 function getBaseDate(task: Task): Date {
@@ -75,9 +73,8 @@ function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
   return '#4CAF50'
 }
 
-function TaskCard({ task, checked, log, onToggle, categoryColor, hasNote, onViewNotes }: {
+function TaskCard({ task, checked, log, onToggle, categoryColor }: {
   task: Task; checked: boolean; log?: DailyLog; onToggle: () => void; categoryColor: Map<string, string>
-  hasNote?: boolean; onViewNotes?: (taskId: string) => void
 }) {
   const [showMemo, setShowMemo] = useState(false)
   const [memoText, setMemoText] = useState(log?.memo ?? '')
@@ -160,7 +157,7 @@ function TaskCard({ task, checked, log, onToggle, categoryColor, hasNote, onView
   )
 }
 
-export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage = () => {}, onChecked, noteTaskIds, onViewNotes }: MobileViewProps) {
+export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage = () => {}, onChecked }: MobileViewProps) {
   const [currentDay, setCurrentDay] = useState(new Date())
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const dateStr = format(currentDay, 'yyyy-MM-dd')
@@ -268,8 +265,7 @@ export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage 
                 const log = getLogForPeriod(logs.logs, task.id, task, currentDay)
                 const checked = active && !!log
                 return active ? (
-                  <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor}
-                    hasNote={noteTaskIds?.has(task.id)} onViewNotes={onViewNotes} />
+                  <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor} />
                 ) : (
                   <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
                     <div className="flex items-center gap-3.5">
@@ -292,8 +288,7 @@ export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage 
                 const log = getLogForPeriod(logs.logs, task.id, task, currentDay)
                 const checked = active && !!log
                 return active ? (
-                  <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor}
-                    hasNote={noteTaskIds?.has(task.id)} onViewNotes={onViewNotes} />
+                  <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor} />
                 ) : (
                   <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
                     <div className="flex items-center gap-3.5">

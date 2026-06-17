@@ -13,8 +13,6 @@ import { fetchLogs } from '../lib/api'
 interface HeatmapViewProps {
   tasks: Task[]
   categoryColor: Map<string, string>
-  noteTaskIds?: Set<string>
-  onViewNotes?: (taskId: string) => void
 }
 
 const dayOrder = [1, 2, 3, 4, 5, 6, 0]
@@ -24,7 +22,7 @@ function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
   return '#4CAF50'
 }
 
-export function HeatmapView({ tasks, categoryColor, noteTaskIds, onViewNotes }: HeatmapViewProps) {
+export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const [yearLogs, setYearLogs] = useState<Record<string, Set<string>>>({})
 

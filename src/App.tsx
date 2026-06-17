@@ -28,8 +28,7 @@ function App() {
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
-  const [noteTaskIds, setNoteTaskIds] = useState<Set<string>>(new Set())
-
+  
   const categoryColor = useMemo(() => {
     const map = new Map<string, string>()
     for (const c of categories) map.set(c.name, c.color)
@@ -152,8 +151,7 @@ function App() {
             )}
 
             {dates.viewMode === 'heatmap' && (
-              <HeatmapView tasks={tasks.tasks} categoryColor={categoryColor}
-                noteTaskIds={noteTaskIds} onViewNotes={handleViewNotes} />
+              <HeatmapView tasks={tasks.tasks} categoryColor={categoryColor} />
             )}
             {dates.viewMode === 'stats' && (
               <StatsView tasks={tasks.tasks} categoryColor={categoryColor} />
@@ -171,8 +169,6 @@ function App() {
                     onReloadLogs={loadLogs}
                     onManage={handleManage}
                     onChecked={handleChecked}
-                    noteTaskIds={noteTaskIds}
-                    onViewNotes={handleViewNotes}
                   />
                 </div>
                 <div className="hidden md:block">
@@ -183,8 +179,6 @@ function App() {
                     categoryColor={categoryColor}
                     categoryBgColor={categoryBgColor}
                     onChecked={handleChecked}
-                    noteTaskIds={noteTaskIds}
-                    onViewNotes={handleViewNotes}
                   />
                 </div>
               </>

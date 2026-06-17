@@ -18,8 +18,6 @@ interface MatrixViewProps {
   categoryColor: Map<string, string>
   categoryBgColor: Map<string, string>
   onChecked?: (taskId: string, taskName: string) => void
-  noteTaskIds?: Set<string>
-  onViewNotes?: (taskId: string) => void
 }
 
 const dayColors: Record<string, string> = {
@@ -129,7 +127,7 @@ function MemoIcon({ log, onMemoUpdate }: { log?: DailyLog; onMemoUpdate: () => v
   )
 }
 
-export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, onChecked, noteTaskIds, onViewNotes }: MatrixViewProps) {
+export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, onChecked }: MatrixViewProps) {
   const grouped = useMemo(() => {
     const active = tasks.filter((t) => t.status === 'active')
     const map = new Map<string, Task[]>()
@@ -357,15 +355,6 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
                 else { await logs.check(task.id, dateStr); onChecked?.(task.id, task.name) }
               }}
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
-            {noteTaskIds?.has(task.id) && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onViewNotes?.(task.id) }}
-                className="text-xs text-blue-400 hover:text-blue-600 ml-1"
-                title="メモを見る"
-              >
-                🗒️
-              </button>
-            )}
             {checked && <MemoIcon log={log} onMemoUpdate={() => {}} />}
           </div>
         )
