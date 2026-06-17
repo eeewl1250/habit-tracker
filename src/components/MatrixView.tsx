@@ -205,8 +205,8 @@ function TaskRow({ task, days, logs, categoryColor }: {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0">
-        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0">
+        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
         <span className="text-gray-800 font-medium truncate text-sm">{task.name}</span>
       </div>
       {days.map((day) => {
@@ -292,8 +292,8 @@ function FrequencyRow({ task, days, logs, color }: {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0">
-        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0">
+        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
         <span className="text-gray-800 font-medium truncate text-sm">{task.name}</span>
         <span className="text-[10px] text-gray-400 flex-shrink-0">{freq}日ごと</span>
       </div>

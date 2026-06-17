@@ -98,7 +98,7 @@ function TaskCard({ task, checked, log, onToggle, categoryColor }: {
         className="w-full text-left px-4 py-3.5 active:scale-[0.97] transition-transform"
       >
         <div className="flex items-center gap-3.5">
-          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getTaskColor(task, categoryColor) }} />
+          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getTaskColor(task, categoryColor) }} />
           <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
             checked ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
           }`}>

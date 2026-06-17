@@ -55,6 +55,15 @@ function App() {
 
   const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
 
+  const refreshCategories = useCallback(() => {
+    fetchCategories().then(setCategories).catch(() => {})
+  }, [])
+
+  const handleRefresh = useCallback(() => {
+    tasks.reload()
+    refreshCategories()
+  }, [tasks, refreshCategories])
+
   const handleManage = useCallback(() => {
     setShowManagement((p) => !p)
   }, [])
@@ -80,7 +89,7 @@ function App() {
             onAdd={(form) => tasks.add(form)}
             onEdit={(id, form) => tasks.edit(id, form)}
             onDelete={(id) => tasks.remove(id)}
-            onRefresh={tasks.reload}
+            onRefresh={handleRefresh}
           />
         ) : (
           <>
@@ -107,6 +116,7 @@ function App() {
                     categories={categories}
                     onSave={async (form) => {
                       await tasks.add(form)
+                      refreshCategories()
                       setShowForm(false)
                     }}
                     onCancel={() => setShowForm(false)}

@@ -264,8 +264,8 @@ export function ManagementPage({
               {catTasks.map((task) => (
                 <div key={task.id}
                   className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0"
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0"
                       style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
                     <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
                     <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
@@ -290,8 +290,8 @@ export function ManagementPage({
             {grouped.uncategorized.map((task) => (
               <div key={task.id}
                 className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0"
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{ backgroundColor: '#4CAF50' }} />
                   <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
                   <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
