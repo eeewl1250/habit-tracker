@@ -15,7 +15,7 @@ import { useLogs } from './hooks/useLogs'
 import { useViewDates } from './hooks/useViewDates'
 import { useToast } from './hooks/useToast'
 import { useNoteFlow } from './hooks/useNoteFlow'
-import { fetchCategories, fetchNoteTaskIds } from './lib/api'
+import { fetchCategories } from './lib/api'
 import type { Category, ViewMode } from './types'
 
 function App() {
@@ -57,7 +57,6 @@ function App() {
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {})
-    fetchNoteTaskIds().then(setNoteTaskIds).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -78,10 +77,6 @@ function App() {
   const handleManage = useCallback(() => {
     setShowManagement((p) => !p)
   }, [])
-
-  const handleViewNotes = useCallback((_taskId: string) => {
-    dates.setViewMode('notes')
-  }, [dates])
 
   const handleChecked = useCallback((taskId: string, taskName: string) => {
     toast.show(`「${taskName}」を記録しました`)
