@@ -13,6 +13,8 @@ import { fetchLogs } from '../lib/api'
 interface HeatmapViewProps {
   tasks: Task[]
   categoryColor: Map<string, string>
+  noteTaskIds?: Set<string>
+  onViewNotes?: (taskId: string) => void
 }
 
 const dayOrder = [1, 2, 3, 4, 5, 6, 0]
@@ -22,7 +24,7 @@ function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
   return '#4CAF50'
 }
 
-export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
+export function HeatmapView({ tasks, categoryColor, noteTaskIds, onViewNotes }: HeatmapViewProps) {
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const [yearLogs, setYearLogs] = useState<Record<string, Set<string>>>({})
 
@@ -101,8 +103,12 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
       <div key={task.id}>
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-          <span className="text-sm font-medium text-gray-700 whitespace-nowrap min-w-[80px]">
+          <span className="text-sm font-medium text-gray-700 whitespace-nowrap min-w-[80px] flex items-center gap-1">
             {task.name}
+            {noteTaskIds?.has(task.id) && (
+              <button onClick={() => onViewNotes?.(task.id)}
+                className="text-xs text-blue-400 hover:text-blue-600" title="メモを見る">📝</button>
+            )}
           </span>
           <span className="text-xs text-gray-400">
             {stats.completed}日/{stats.total}日

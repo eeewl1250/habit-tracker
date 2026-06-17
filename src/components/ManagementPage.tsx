@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import type { Task, TaskFormData, Category } from '../types'
 import { WEEKDAY_KEYS, WEEKDAY_LABELS, CATEGORY_COLOR_PAIRS } from '../types'
 import { TaskForm } from './TaskForm'
-import { createCategory, renameCategory, deleteCategory, updateCategoryColor } from '../lib/api'
+import { createCategory, renameCategory, deleteCategory, updateCategoryColor, updateCategoriesOrder, updateTasksOrder } from '../lib/api'
 
 interface ManagementPageProps {
   tasks: Task[]
@@ -128,6 +128,36 @@ export function ManagementPage({
       onRefresh()
     } catch (e) {
       console.error('Failed to save category', e)
+    }
+  }
+
+  const moveCategory = async (name: string, dir: -1 | 1) => {
+    const idx = categories.findIndex((c) => c.name === name)
+    if (idx < 0) return
+    const target = idx + dir
+    if (target < 0 || target >= categories.length) return
+    const swapped = [...categories]
+    ;[swapped[idx], swapped[target]] = [swapped[target], swapped[idx]]
+    try {
+      await updateCategoriesOrder(swapped.map((c) => c.name))
+      onRefresh()
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const moveTask = async (ids: string[], taskId: string, dir: -1 | 1) => {
+    const idx = ids.indexOf(taskId)
+    if (idx < 0) return
+    const target = idx + dir
+    if (target < 0 || target >= ids.length) return
+    const swapped = [...ids]
+    ;[swapped[idx], swapped[target]] = [swapped[target], swapped[idx]]
+    try {
+      await updateTasksOrder(swapped)
+      onRefresh()
+    } catch (e) {
+      console.error(e)
     }
   }
 
@@ -264,8 +294,9 @@ export function ManagementPage({
         </div>
       )}
 
-      {grouped.grouped.map(([category, catTasks]) => {
+      {grouped.grouped.map(([category, catTasks], gi) => {
         const cat = categories.find((c) => c.name === category)
+        const taskIds = catTasks.map((t) => t.id)
         return (
           <section key={category}>
             <div className="flex items-center justify-between mb-2">
@@ -274,6 +305,10 @@ export function ManagementPage({
                 <span className="text-xs text-gray-400">{catTasks.length}</span>
               </div>
               <div className="flex gap-1 items-center">
+                <button onClick={() => moveCategory(category, -1)}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-1" title="上に移動">↑</button>
+                <button onClick={() => moveCategory(category, 1)}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-1" title="下に移動">↓</button>
                 <button onClick={() => cat && openCategoryEdit(cat)}
                   className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
                 <button onClick={() => setConfirmDeleteCat(category)}
@@ -281,10 +316,14 @@ export function ManagementPage({
               </div>
             </div>
             <div className="space-y-1">
-              {catTasks.map((task) => (
+              {catTasks.map((task, ti) => (
                 <div key={task.id}
                   className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2 min-w-0">
+                    <button onClick={() => moveTask(taskIds, task.id, -1)}
+                      className="text-xs text-gray-300 hover:text-gray-500 px-0.5" title="上に移動">↑</button>
+                    <button onClick={() => moveTask(taskIds, task.id, 1)}
+                      className="text-xs text-gray-300 hover:text-gray-500 px-0.5" title="下に移動">↓</button>
                     <div className="w-2 h-2 rounded-full flex-shrink-0"
                       style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
                     <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>

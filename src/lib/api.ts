@@ -110,7 +110,7 @@ export async function fetchCategories(): Promise<Category[]> {
   const { data, error } = await supabase
     .from('categories')
     .select('*')
-    .order('name', { ascending: true })
+    .order('sort_order', { ascending: true })
   if (error) throw error
 
   if (data && data.length > 0) return data
@@ -126,7 +126,7 @@ export async function fetchCategories(): Promise<Category[]> {
   if (names.length === 0) return []
   const defaults: Category[] = names.map((name, i) => {
     const pair = CATEGORY_COLOR_PAIRS[i % CATEGORY_COLOR_PAIRS.length]
-    return { name, color: pair.dot, bg_color: pair.bg }
+    return { name, color: pair.dot, bg_color: pair.bg, sort_order: i }
   })
   await supabase.from('categories').upsert(defaults)
   return defaults
@@ -134,8 +134,30 @@ export async function fetchCategories(): Promise<Category[]> {
 
 export async function createCategory(name: string, color: string): Promise<void> {
   const pair = CATEGORY_COLOR_PAIRS.find((p) => p.dot === color) ?? CATEGORY_COLOR_PAIRS[0]
-  const { error } = await supabase.from('categories').upsert({ name, color, bg_color: pair.bg })
+  const { data: existing } = await supabase.from('categories').select('count').single()
+  const sort_order = existing ? 0 : 0
+  const { error } = await supabase.from('categories').upsert({ name, color, bg_color: pair.bg, sort_order: 0 })
   if (error) throw error
+}
+
+export async function updateCategoriesOrder(names: string[]): Promise<void> {
+  for (let i = 0; i < names.length; i++) {
+    const { error } = await supabase
+      .from('categories')
+      .update({ sort_order: i })
+      .eq('name', names[i])
+    if (error) throw error
+  }
+}
+
+export async function updateTasksOrder(ids: string[]): Promise<void> {
+  for (let i = 0; i < ids.length; i++) {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ sort_order: i })
+      .eq('id', ids[i])
+    if (error) throw error
+  }
 }
 
 export async function updateCategoryColor(name: string, color: string, bg_color: string): Promise<void> {
@@ -173,6 +195,14 @@ export async function deleteCategory(name: string): Promise<void> {
 }
 
 // ── Notes ──
+
+export async function fetchNoteTaskIds(): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('notes')
+    .select('task_id')
+  if (error) throw error
+  return new Set((data ?? []).map((n) => n.task_id))
+}
 
 export async function fetchNotesWithTasks(): Promise<NoteWithTask[]> {
   const { data, error } = await supabase

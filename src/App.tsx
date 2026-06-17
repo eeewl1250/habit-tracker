@@ -13,7 +13,7 @@ import { NoteModal } from './components/NoteModal'
 import { useTasks } from './hooks/useTasks'
 import { useLogs } from './hooks/useLogs'
 import { useViewDates } from './hooks/useViewDates'
-import { fetchCategories } from './lib/api'
+import { fetchCategories, fetchNoteTaskIds } from './lib/api'
 import type { Category, ViewMode } from './types'
 
 function App() {
@@ -23,6 +23,7 @@ function App() {
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
+  const [noteTaskIds, setNoteTaskIds] = useState<Set<string>>(new Set())
   const [toastMsg, setToastMsg] = useState('')
   const [toastKey, setToastKey] = useState(0)
   const [pendingNote, setPendingNote] = useState<{ taskId: string; taskName: string } | null>(null)
@@ -55,6 +56,7 @@ function App() {
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {})
+    fetchNoteTaskIds().then(setNoteTaskIds).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -75,6 +77,10 @@ function App() {
   const handleManage = useCallback(() => {
     setShowManagement((p) => !p)
   }, [])
+
+  const handleViewNotes = useCallback((_taskId: string) => {
+    dates.setViewMode('notes')
+  }, [dates])
 
   const handleChecked = useCallback((taskId: string, taskName: string) => {
     setToastMsg(`「${taskName}」を記録しました`)
@@ -140,7 +146,8 @@ function App() {
             )}
 
             {dates.viewMode === 'heatmap' && (
-              <HeatmapView tasks={tasks.tasks} categoryColor={categoryColor} />
+              <HeatmapView tasks={tasks.tasks} categoryColor={categoryColor}
+                noteTaskIds={noteTaskIds} onViewNotes={handleViewNotes} />
             )}
             {dates.viewMode === 'stats' && (
               <StatsView tasks={tasks.tasks} categoryColor={categoryColor} />
@@ -158,6 +165,8 @@ function App() {
                     onReloadLogs={loadLogs}
                     onManage={handleManage}
                     onChecked={handleChecked}
+                    noteTaskIds={noteTaskIds}
+                    onViewNotes={handleViewNotes}
                   />
                 </div>
                 <div className="hidden md:block">
@@ -168,6 +177,8 @@ function App() {
                     categoryColor={categoryColor}
                     categoryBgColor={categoryBgColor}
                     onChecked={handleChecked}
+                    noteTaskIds={noteTaskIds}
+                    onViewNotes={handleViewNotes}
                   />
                 </div>
               </>
