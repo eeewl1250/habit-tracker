@@ -143,179 +143,118 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor }
     return { grouped: sorted, uncategorized }
   }, [tasks])
 
-  return (
-    <div className="overflow-x-auto">
-      <div
-        className="grid gap-0 text-sm"
-        style={{ gridTemplateColumns: `160px repeat(${days.length}, minmax(36px, 1fr))` }}
-      >
-        <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200" />
-        {days.map((day) => (
-          <div
-            key={day.toISOString()}
-            className={`text-center py-2 border-b border-gray-200 text-xs font-medium sticky top-0 z-10 ${
-              isToday(day) ? 'bg-blue-100' : 'bg-gray-50'
-            } ${dayColors[format(day, 'E', { locale: ja })] ?? 'text-gray-600'}`}
-          >
-            <div>{format(day, 'E', { locale: ja })}</div>
-            <div className="text-sm">{format(day, 'd')}</div>
-          </div>
-        ))}
+  const colCount = 1 + days.length
 
-        {grouped.grouped.map(([category, catTasks]) => (
-          <CategoryGroup key={category} category={category} tasks={catTasks} days={days} logs={logs}
-            categoryColor={categoryColor} categoryBgColor={categoryBgColor} />
-        ))}
-        {grouped.uncategorized.length > 0 && (
-          <CategoryGroup category="" tasks={grouped.uncategorized} days={days} logs={logs}
-            categoryColor={categoryColor} categoryBgColor={categoryBgColor} />
-        )}
-      </div>
-    </div>
+  const cells: React.ReactNode[] = []
+
+  // Header row
+  cells.push(
+    <div key="corner" className="sticky top-0 left-0 z-30 bg-gray-50 border-b border-r border-gray-200"
+      style={{ gridColumn: 1, gridRow: 1 }} />
   )
-}
-
-function CategoryGroup({ category, tasks, days, logs, categoryColor, categoryBgColor }: {
-  category: string; tasks: Task[]; days: Date[]; logs: MatrixViewProps['logs']
-  categoryColor: Map<string, string>; categoryBgColor: Map<string, string>
-}) {
-  const span = 1 + days.length
-  const bg = categoryBgColor.get(category) ?? '#F9FAFB'
-  return (
-    <>
-      <div className="px-3 py-1.5 text-xs font-bold text-gray-500 border-b border-gray-200 sticky left-0"
-        style={{ gridColumn: `span ${span}`, backgroundColor: bg }}>
-        {category || 'その他'}
+  days.forEach((day, di) => {
+    cells.push(
+      <div key={`hdr-${di}`}
+        className={`text-center py-2 border-b border-gray-200 text-xs font-medium sticky top-0 z-20 ${
+          isToday(day) ? 'bg-blue-100' : 'bg-gray-50'
+        } ${dayColors[format(day, 'E', { locale: ja })] ?? 'text-gray-600'}`}
+        style={{ gridColumn: di + 2, gridRow: 1 }}>
+        <div>{format(day, 'E', { locale: ja })}</div>
+        <div className="text-sm">{format(day, 'd')}</div>
       </div>
-      {tasks.map((task) => (
-        <TaskRow key={task.id} task={task} days={days} logs={logs} categoryColor={categoryColor} />
-      ))}
-    </>
-  )
-}
+    )
+  })
 
-function TaskRow({ task, days, logs, categoryColor }: {
-  task: Task; days: Date[]; logs: MatrixViewProps['logs']; categoryColor: Map<string, string>
-}) {
-  const color = getTaskColor(task, categoryColor)
+  let row = 1
 
-  if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
-    return <FrequencyRow task={task} days={days} logs={logs} color={color} />
+  const addCategoryRow = (category: string, bg: string, color: string) => {
+    row++
+    cells.push(
+      <div key={`cat-${category}`}
+        className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold border-b border-gray-200"
+        style={{ gridColumn: 1, gridRow: row, backgroundColor: bg, color }}>
+        {category}
+      </div>
+    )
+    cells.push(
+      <div key={`cat-fill-${category}`}
+        className="border-b border-gray-200"
+        style={{ gridColumn: `2 / ${colCount + 1}`, gridRow: row, backgroundColor: bg }} />
+    )
   }
 
-  return (
-    <>
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0">
+  const addTaskRow = (task: Task) => {
+    row++
+    const color = getTaskColor(task, categoryColor)
+
+    cells.push(
+      <div key={`name-${task.id}`}
+        className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0"
+        style={{ gridColumn: 1, gridRow: row }}>
         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
         <span className="text-gray-800 font-medium truncate text-sm">{task.name}</span>
       </div>
-      {days.map((day) => {
-        const dateStr = format(day, 'yyyy-MM-dd')
-        const active = isDayActive(task, day)
-        const today = isToday(day)
-        const checked = logs.isChecked(task.id, dateStr)
-        const log = logs.logs.find((l) => l.task_id === task.id && l.date === dateStr)
+    )
 
-        if (!active) {
-          return (
-            <div key={`${task.id}-${dateStr}`}
-              className={`flex items-center justify-center py-2 border-b border-gray-100 min-w-0 ${
-                today ? 'bg-blue-50/50' : 'bg-white'
-              }`}
-            />
-          )
+    if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
+      const freq = task.frequency!
+      const base = getBaseDate(task)
+
+      const groups: { days: Date[]; startIdx: number }[] = []
+      for (let i = 0; i < days.length; i++) {
+        const day = days[i]
+        const diff = Math.round((day.getTime() - base.getTime()) / 86400000)
+        const periodStart = getPeriodStart(diff, freq)
+        if (diff === periodStart) {
+          const groupDays = [day]
+          for (let j = 1; j < freq && i + j < days.length; j++) {
+            groupDays.push(days[i + j])
+          }
+          groups.push({ days: groupDays, startIdx: i })
+          i += freq - 1
         }
-
-        return (
-          <div key={`${task.id}-${dateStr}`}
-            className={`flex items-center justify-center gap-0.5 py-2 border-b border-gray-100 min-w-0 ${
-              today ? 'bg-blue-50' : 'bg-white'
-            }`}>
-            <input type="checkbox" checked={checked}
-              onChange={async () => {
-                if (checked) { const id = logs.getLogId(task.id, dateStr); if (id) await logs.undo(id) }
-                else await logs.check(task.id, dateStr)
-              }}
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
-            {checked && <MemoIcon log={log} onMemoUpdate={() => {}} />}
-          </div>
-        )
-      })}
-    </>
-  )
-}
-
-function FrequencyRow({ task, days, logs, color }: {
-  task: Task; days: Date[]; logs: MatrixViewProps['logs']; color: string
-}) {
-  const freq = task.frequency!
-  const base = getBaseDate(task)
-
-  const groups: { days: Date[]; startIdx: number }[] = []
-  for (let i = 0; i < days.length; i++) {
-    const day = days[i]
-    const diff = Math.round((day.getTime() - base.getTime()) / 86400000)
-    const periodStart = getPeriodStart(diff, freq)
-    if (diff === periodStart) {
-      const groupDays = [day]
-      for (let j = 1; j < freq && i + j < days.length; j++) {
-        groupDays.push(days[i + j])
       }
-      groups.push({ days: groupDays, startIdx: i })
-      i += freq - 1
-    }
-  }
 
-  const logsList = logs.logs
+      const logsList = logs.logs
+      const getLogForGroup = (groupDays: Date[]): DailyLog | undefined => {
+        const s = format(groupDays[0], 'yyyy-MM-dd')
+        const e = format(groupDays[groupDays.length - 1], 'yyyy-MM-dd')
+        return getLogInRange(logsList, task.id, s, e)
+      }
+      const isGroupChecked = (groupDays: Date[]): boolean => {
+        const s = format(groupDays[0], 'yyyy-MM-dd')
+        const e = format(groupDays[groupDays.length - 1], 'yyyy-MM-dd')
+        return isCheckedInRange(logsList, task.id, s, e)
+      }
+      const toggleGroup = async (groupDays: Date[]) => {
+        const s = format(groupDays[0], 'yyyy-MM-dd')
+        const existing = getLogInRange(logsList, task.id, s, s)
+        if (existing) {
+          await logs.undo(existing.id)
+        } else {
+          await logs.check(task.id, s)
+        }
+      }
 
-  const getLogForGroup = (group: { days: Date[] }): DailyLog | undefined => {
-    const start = format(group.days[0], 'yyyy-MM-dd')
-    const end = format(group.days[group.days.length - 1], 'yyyy-MM-dd')
-    return getLogInRange(logsList, task.id, start, end)
-  }
-
-  const isGroupChecked = (group: { days: Date[] }): boolean => {
-    const start = format(group.days[0], 'yyyy-MM-dd')
-    const end = format(group.days[group.days.length - 1], 'yyyy-MM-dd')
-    return isCheckedInRange(logsList, task.id, start, end)
-  }
-
-  const toggleGroup = async (group: { days: Date[] }) => {
-    const start = format(group.days[0], 'yyyy-MM-dd')
-    const existing = getLogInRange(logsList, task.id, start, start)
-    if (existing) {
-      await logs.undo(existing.id)
-    } else {
-      await logs.check(task.id, start)
-    }
-  }
-
-  return (
-    <>
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0">
-        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-        <span className="text-gray-800 font-medium truncate text-sm">{task.name}</span>
-        <span className="text-[10px] text-gray-400 flex-shrink-0">{freq}日ごと</span>
-      </div>
-      {groups.map((group, gi) => {
-        const span = group.days.length
-        const checked = isGroupChecked(group)
-        const log = getLogForGroup(group)
+      groups.forEach((group, gi) => {
+        const checked = isGroupChecked(group.days)
+        const log = getLogForGroup(group.days)
         const firstDay = group.days[0]
         const today = isToday(firstDay)
+        const span = group.days.length
 
-        return (
-          <div key={gi}
+        cells.push(
+          <div key={`g-${task.id}-${gi}`}
             className={`relative flex items-center justify-center py-2 border-b border-gray-100 min-w-0 ${
               today ? 'bg-blue-50' : 'bg-white'
             }`}
-            style={{ gridColumn: `span ${span}` }}>
+            style={{ gridColumn: `${group.startIdx + 2} / span ${span}`, gridRow: row }}>
             <div className={`absolute inset-0 mx-1 my-1 rounded-md border-2 border-dashed ${
               checked ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200'
             }`} />
             <div className="relative flex items-center gap-1">
               <input type="checkbox" checked={checked}
-                onChange={() => toggleGroup(group)}
+                onChange={() => toggleGroup(group.days)}
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer z-10" />
               {checked && log && (
                 <MemoIcon log={log} onMemoUpdate={() => {}} />
@@ -328,7 +267,67 @@ function FrequencyRow({ task, days, logs, color }: {
             )}
           </div>
         )
-      })}
-    </>
+      })
+    } else {
+      days.forEach((day, di) => {
+        const dateStr = format(day, 'yyyy-MM-dd')
+        const active = isDayActive(task, day)
+        const today = isToday(day)
+        const checked = logs.isChecked(task.id, dateStr)
+        const log = logs.logs.find((l) => l.task_id === task.id && l.date === dateStr)
+
+        if (!active) {
+          cells.push(
+            <div key={`cb-${task.id}-${di}`}
+              className={`flex items-center justify-center py-2 border-b border-gray-100 min-w-0 ${
+                today ? 'bg-blue-50/50' : 'bg-white'
+              }`}
+              style={{ gridColumn: di + 2, gridRow: row }} />
+          )
+          return
+        }
+
+        cells.push(
+          <div key={`cb-${task.id}-${di}`}
+            className={`flex items-center justify-center gap-0.5 py-2 border-b border-gray-100 min-w-0 ${
+              today ? 'bg-blue-50' : 'bg-white'
+            }`}
+            style={{ gridColumn: di + 2, gridRow: row }}>
+            <input type="checkbox" checked={checked}
+              onChange={async () => {
+                if (checked) { const id = logs.getLogId(task.id, dateStr); if (id) await logs.undo(id) }
+                else await logs.check(task.id, dateStr)
+              }}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+            {checked && <MemoIcon log={log} onMemoUpdate={() => {}} />}
+          </div>
+        )
+      })
+    }
+  }
+
+  grouped.grouped.forEach(([category, catTasks]) => {
+    const bg = categoryBgColor.get(category) ?? '#F9FAFB'
+    const color = categoryColor.get(category) ?? '#4CAF50'
+    addCategoryRow(category, bg, color)
+    catTasks.forEach(addTaskRow)
+  })
+
+  if (grouped.uncategorized.length > 0) {
+    addCategoryRow('その他', '#F9FAFB', '#6B7280')
+    grouped.uncategorized.forEach(addTaskRow)
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <div
+        className="grid gap-0 text-sm"
+        style={{ gridTemplateColumns: `160px repeat(${days.length}, minmax(36px, 1fr))` }}
+      >
+        {cells}
+      </div>
+    </div>
   )
 }
+
+
