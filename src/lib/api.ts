@@ -139,23 +139,19 @@ export async function createCategory(name: string, color: string): Promise<void>
 }
 
 export async function updateCategoriesOrder(names: string[]): Promise<void> {
-  for (let i = 0; i < names.length; i++) {
-    const { error } = await supabase
-      .from('categories')
-      .update({ sort_order: i })
-      .eq('name', names[i])
-    if (error) throw error
-  }
+  const updates = names.map((name, i) => ({ name, sort_order: i }))
+  const { error } = await supabase
+    .from('categories')
+    .upsert(updates, { onConflict: 'name' })
+  if (error) throw error
 }
 
 export async function updateTasksOrder(ids: string[]): Promise<void> {
-  for (let i = 0; i < ids.length; i++) {
-    const { error } = await supabase
-      .from('tasks')
-      .update({ sort_order: i })
-      .eq('id', ids[i])
-    if (error) throw error
-  }
+  const updates = ids.map((id, i) => ({ id, sort_order: i }))
+  const { error } = await supabase
+    .from('tasks')
+    .upsert(updates, { onConflict: 'id' })
+  if (error) throw error
 }
 
 export async function updateCategoryColor(name: string, color: string, bg_color: string): Promise<void> {
@@ -208,7 +204,17 @@ export async function fetchNotesWithTasks(): Promise<NoteWithTask[]> {
     .select('*, tasks(name, category)')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return (data ?? []).map((n: any) => ({
+
+  type RawNoteWithTask = {
+    id: string
+    task_id: string
+    content: string
+    created_at: string
+    updated_at: string
+    tasks: { name: string; category: string } | null
+  }
+
+  return (data as RawNoteWithTask[] ?? []).map((n) => ({
     id: n.id,
     task_id: n.task_id,
     content: n.content,

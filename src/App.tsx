@@ -13,6 +13,8 @@ import { NoteModal } from './components/NoteModal'
 import { useTasks } from './hooks/useTasks'
 import { useLogs } from './hooks/useLogs'
 import { useViewDates } from './hooks/useViewDates'
+import { useToast } from './hooks/useToast'
+import { useNoteFlow } from './hooks/useNoteFlow'
 import { fetchCategories, fetchNoteTaskIds } from './lib/api'
 import type { Category, ViewMode } from './types'
 
@@ -20,15 +22,13 @@ function App() {
   const tasks = useTasks()
   const logs = useLogs()
   const dates = useViewDates()
+  const toast = useToast()
+  const noteFlow = useNoteFlow()
+
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [noteTaskIds, setNoteTaskIds] = useState<Set<string>>(new Set())
-  const [toastMsg, setToastMsg] = useState('')
-  const [toastKey, setToastKey] = useState(0)
-  const [pendingNote, setPendingNote] = useState<{ taskId: string; taskName: string } | null>(null)
-  const [notePrompt, setNotePrompt] = useState<{ taskId: string; taskName: string } | null>(null)
-  const [noteRefreshKey, setNoteRefreshKey] = useState(0)
 
   const categoryColor = useMemo(() => {
     const map = new Map<string, string>()
@@ -52,7 +52,7 @@ function App() {
       format(dates.dateRange.start, 'yyyy-MM-dd'),
       format(dates.dateRange.end, 'yyyy-MM-dd')
     )
-  }, [dates.dateRange.start, dates.dateRange.end])
+  }, [dates.dateRange.start, dates.dateRange.end, logs])
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {})
@@ -83,10 +83,14 @@ function App() {
   }, [dates])
 
   const handleChecked = useCallback((taskId: string, taskName: string) => {
-    setToastMsg(`「${taskName}」を記録しました`)
-    setToastKey((k) => k + 1)
-    setPendingNote({ taskId, taskName })
-  }, [])
+    toast.show(`「${taskName}」を記録しました`)
+    noteFlow.setPendingFromCheckIn(taskId, taskName)
+  }, [toast, noteFlow])
+
+  const handleToastClick = useCallback(() => {
+    noteFlow.handleToastClick()
+    toast.close()
+  }, [toast, noteFlow])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -153,7 +157,7 @@ function App() {
               <StatsView tasks={tasks.tasks} categoryColor={categoryColor} />
             )}
             {dates.viewMode === 'notes' &&
-              <NotesView key={noteRefreshKey} categories={categories} categoryColor={categoryColor} />}
+              <NotesView key={noteFlow.refreshKey} categories={categories} categoryColor={categoryColor} />}
 
             {showMatrix && (
               <>
@@ -197,25 +201,19 @@ function App() {
       )}
 
       <Toast
-        key={toastKey}
-        message={toastMsg}
-        visible={!!toastMsg}
-        onClose={() => { setToastMsg(''); setPendingNote(null) }}
-        onClick={() => {
-          if (pendingNote) {
-            setNotePrompt(pendingNote)
-            setPendingNote(null)
-          }
-          setToastMsg('')
-        }}
+        key={toast.key}
+        message={toast.message}
+        visible={toast.isVisible}
+        onClose={toast.close}
+        onClick={handleToastClick}
       />
 
-      {notePrompt && (
+      {noteFlow.prompt && (
         <NoteModal
-          taskId={notePrompt.taskId}
-          taskName={notePrompt.taskName}
-          onClose={() => setNotePrompt(null)}
-          onSaved={() => setNoteRefreshKey((k) => k + 1)}
+          taskId={noteFlow.prompt.taskId}
+          taskName={noteFlow.prompt.taskName}
+          onClose={noteFlow.handleNoteModalClose}
+          onSaved={noteFlow.handleNoteSaved}
         />
       )}
     </div>

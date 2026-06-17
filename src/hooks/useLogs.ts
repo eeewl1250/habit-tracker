@@ -1,9 +1,17 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import type { DailyLog } from '../types'
 import { fetchLogs, checkIn, undoCheckIn } from '../lib/api'
 
 export function useLogs() {
   const [logs, setLogs] = useState<DailyLog[]>([])
+
+  const logIndex = useMemo(() => {
+    const index = new Map<string, DailyLog>()
+    for (const log of logs) {
+      index.set(`${log.task_id}:${log.date}`, log)
+    }
+    return index
+  }, [logs])
 
   const load = useCallback(async (dateFrom: string, dateTo: string) => {
     try {
@@ -26,11 +34,11 @@ export function useLogs() {
   }
 
   const isChecked = (taskId: string, date: string): boolean => {
-    return logs.some((l) => l.task_id === taskId && l.date === date)
+    return logIndex.has(`${taskId}:${date}`)
   }
 
   const getLogId = (taskId: string, date: string): string | undefined => {
-    return logs.find((l) => l.task_id === taskId && l.date === date)?.id
+    return logIndex.get(`${taskId}:${date}`)?.id
   }
 
   const getLogsForTask = (taskId: string): DailyLog[] => {
