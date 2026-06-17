@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import type { Task, TaskFormData, Category } from '../types'
 import { WEEKDAY_KEYS, WEEKDAY_LABELS, CATEGORY_COLOR_PAIRS } from '../types'
 import { TaskForm } from './TaskForm'
-import { createCategory, renameCategory, deleteCategory, updateCategoryColor, updateCategoriesOrder, updateTasksOrder } from '../lib/api'
+import { createCategory, renameCategory, deleteCategory, updateCategoryColor, updateCategoriesOrder, updateTasksOrder, updateTask } from '../lib/api'
 
 interface ManagementPageProps {
   tasks: Task[]
@@ -48,6 +48,10 @@ export function ManagementPage({
   const [dragItem, setDragItem] = useState<{ type: 'cat'; name: string } | { type: 'task'; id: string; cat: string } | null>(null)
   const [editCatName, setEditCatName] = useState('')
   const [editCatPairIdx, setEditCatPairIdx] = useState(0)
+  const [sortMode, setSortMode] = useState(false)
+  const [catOrder, setCatOrder] = useState<string[]>([])
+  const [taskOrder, setTaskOrder] = useState<Record<string, string[]>>({})
+  const [saving, setSaving] = useState(false)
 
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const disabledTasks = tasks.filter((t) => t.status === 'disabled')
@@ -66,15 +70,74 @@ export function ManagementPage({
         uncategorized.push(t)
       }
     }
-    const catOrder = categories.map((c) => c.name)
+    const catOrderArr = categories.map((c) => c.name)
     const sorted = [...map.entries()].sort(
-      ([a], [b]) => catOrder.indexOf(a) - catOrder.indexOf(b)
+      ([a], [b]) => catOrderArr.indexOf(a) - catOrderArr.indexOf(b)
     )
-    return {
-      grouped: sorted,
-      uncategorized,
-    }
+    return { grouped: sorted, uncategorized }
   }, [activeTasks, categories])
+
+  const tasksMap = useMemo(() => {
+    const m = new Map<string, Task>()
+    for (const t of tasks) m.set(t.id, t)
+    return m
+  }, [tasks])
+
+  const enterSortMode = () => {
+    setCatOrder(categories.map((c) => c.name))
+    const to: Record<string, string[]> = {}
+    for (const [cat, ts] of grouped.grouped) {
+      to[cat] = ts.map((t) => t.id)
+    }
+    setTaskOrder(to)
+    setSortMode(true)
+  }
+
+  const saveSort = async () => {
+    setSaving(true)
+    try {
+      await updateCategoriesOrder(catOrder)
+      for (const [cat, ids] of Object.entries(taskOrder)) {
+        if (ids.length > 0) {
+          const origCatTasks = grouped.grouped.find(([c]) => c === cat)?.[1] ?? []
+          const origIds = new Set(origCatTasks.map((t) => t.id))
+          for (const id of ids) {
+            if (!origIds.has(id)) {
+              const t = tasksMap.get(id)
+              if (t && t.category !== cat) {
+                await updateTask(id, { category: cat })
+              }
+            }
+          }
+          for (const origId of origIds) {
+            if (!ids.includes(origId) && origCatTasks.some((t) => t.id === origId)) {
+              const t = tasksMap.get(origId)
+              if (t && t.category === cat) {
+                await updateTask(origId, { category: '' })
+              }
+            }
+          }
+        }
+      }
+      for (const [, ids] of Object.entries(taskOrder)) {
+        if (ids.length > 0) {
+          await updateTasksOrder(ids)
+        }
+      }
+      onRefresh()
+      setSortMode(false)
+    } catch (e) {
+      console.error('Failed to save sort order', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const cancelSort = () => {
+    setSortMode(false)
+    setCatOrder([])
+    setTaskOrder({})
+  }
 
   const handleDeleteTask = async (id: string) => {
     try {
@@ -110,7 +173,7 @@ export function ManagementPage({
   }
 
   const openNewCategory = () => {
-    setEditingCat({ name: '', color: CATEGORY_COLOR_PAIRS[0].dot, bg_color: CATEGORY_COLOR_PAIRS[0].bg, sort_order: 0 })
+    setEditingCat({ name: '', color: CATEGORY_COLOR_PAIRS[0].dot, bg_color: CATEGORY_COLOR_PAIRS[0].bg })
     setEditCatName('')
     setEditCatPairIdx(0)
   }
@@ -137,39 +200,67 @@ export function ManagementPage({
   }
 
   const handleCatDrop = async (catName: string) => {
-    if (!dragItem || dragItem.type !== 'cat' || dragItem.name === catName) return
-    const names = categories.map((c) => c.name)
+    if (!sortMode || !dragItem || dragItem.type !== 'cat' || dragItem.name === catName) return
+    const names = [...catOrder]
     const fromIdx = names.indexOf(dragItem.name)
     const toIdx = names.indexOf(catName)
     if (fromIdx < 0 || toIdx < 0) return
     names.splice(fromIdx, 1)
     names.splice(toIdx, 0, dragItem.name)
-    try {
-      await updateCategoriesOrder(names)
-      onRefresh()
-    } catch (e) {
-      console.error(e)
-    }
+    setCatOrder(names)
     setDragItem(null)
   }
 
-  const handleTaskDrop = async (catName: string, targetTaskId: string) => {
-    if (!dragItem || dragItem.type !== 'task' || dragItem.id === targetTaskId) return
-    const ids = grouped.grouped.find(([c]) => c === catName)?.[1].map((t) => t.id) ?? []
-    if (dragItem.cat !== catName) return
-    const fromIdx = ids.indexOf(dragItem.id)
-    const toIdx = ids.indexOf(targetTaskId)
-    if (fromIdx < 0 || toIdx < 0) return
-    ids.splice(fromIdx, 1)
-    ids.splice(toIdx, 0, dragItem.id)
-    try {
-      await updateTasksOrder(ids)
-      onRefresh()
-    } catch (e) {
-      console.error(e)
+  const handleTaskDrop = useCallback((targetCat: string, targetTaskId: string) => {
+    if (!sortMode || !dragItem || dragItem.type !== 'task' || dragItem.id === targetTaskId) return
+
+    const sourceCat = dragItem.cat
+    const newTaskOrder = { ...taskOrder }
+
+    if (sourceCat === targetCat) {
+      const ids = [...(newTaskOrder[sourceCat] ?? [])]
+      const fromIdx = ids.indexOf(dragItem.id)
+      const toIdx = ids.indexOf(targetTaskId)
+      if (fromIdx < 0 || toIdx < 0) return
+      ids.splice(fromIdx, 1)
+      ids.splice(toIdx, 0, dragItem.id)
+      newTaskOrder[sourceCat] = ids
+    } else {
+      const sourceIds = [...(newTaskOrder[sourceCat] ?? [])]
+      const fromIdx = sourceIds.indexOf(dragItem.id)
+      if (fromIdx < 0) return
+      sourceIds.splice(fromIdx, 1)
+      newTaskOrder[sourceCat] = sourceIds
+
+      const targetIds = [...(newTaskOrder[targetCat] ?? [])]
+      const toIdx = targetIds.indexOf(targetTaskId)
+      if (toIdx < 0) {
+        targetIds.push(dragItem.id)
+      } else {
+        targetIds.splice(toIdx, 0, dragItem.id)
+      }
+      newTaskOrder[targetCat] = targetIds
     }
+
+    setTaskOrder(newTaskOrder)
     setDragItem(null)
-  }
+  }, [sortMode, dragItem, taskOrder])
+
+  const displayGroups = useMemo(() => {
+    if (!sortMode) return grouped.grouped
+    const map = new Map<string, Task[]>()
+    for (const c of categories) map.set(c.name, [])
+    const allTasks = new Map(tasks.filter((t) => t.status === 'active').map((t) => [t.id, t]))
+    for (const [cat, ids] of Object.entries(taskOrder)) {
+      const ts: Task[] = []
+      for (const id of ids) {
+        const t = allTasks.get(id)
+        if (t) ts.push(t)
+      }
+      map.set(cat, ts)
+    }
+    return catOrder.map((name) => [name, map.get(name) ?? []] as [string, Task[]])
+  }, [sortMode, catOrder, taskOrder, categories, tasks])
 
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-6 pb-24">
@@ -189,6 +280,33 @@ export function ManagementPage({
             + 新規タスク
           </button>
         </div>
+      </div>
+
+      <div className="flex gap-2">
+        {sortMode ? (
+          <>
+            <button
+              onClick={saveSort}
+              disabled={saving}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              {saving ? '保存中...' : '並び替えを保存'}
+            </button>
+            <button
+              onClick={cancelSort}
+              className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              キャンセル
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={enterSortMode}
+            className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            並び替え
+          </button>
+        )}
       </div>
 
       {showAdd && (
@@ -304,17 +422,20 @@ export function ManagementPage({
         </div>
       )}
 
-      {grouped.grouped.map(([category, catTasks]) => {
+      {displayGroups.map(([category, catTasks]) => {
         const cat = categories.find((c) => c.name === category)
         return (
           <section key={category}
-            draggable
-            onDragStart={() => setDragItem({ type: 'cat', name: category })}
-            onDragOver={(e) => e.preventDefault()}
+            draggable={sortMode}
+            onDragStart={() => sortMode && setDragItem({ type: 'cat', name: category })}
+            onDragOver={(e) => sortMode && e.preventDefault()}
             onDrop={() => handleCatDrop(category)}
-            className={`rounded-lg p-3 transition-colors ${dragItem?.type === 'cat' && dragItem.name !== category ? 'border-2 border-dashed border-blue-300' : ''}`}>
+            className={`rounded-lg p-3 transition-colors ${
+              sortMode && dragItem?.type === 'cat' && dragItem.name !== category ? 'border-2 border-dashed border-blue-300' : ''
+            } ${sortMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
+                {sortMode && <span className="text-gray-300 text-sm">⠿</span>}
                 <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
                 <span className="text-xs text-gray-400">{catTasks.length}</span>
               </div>
@@ -328,15 +449,15 @@ export function ManagementPage({
             <div className="space-y-1">
               {catTasks.map((task) => (
                 <div key={task.id}
-                  draggable
-                  onDragStart={() => setDragItem({ type: 'task', id: task.id, cat: category })}
-                  onDragOver={(e) => e.preventDefault()}
+                  draggable={sortMode}
+                  onDragStart={() => sortMode && setDragItem({ type: 'task', id: task.id, cat: category })}
+                  onDragOver={(e) => sortMode && e.preventDefault()}
                   onDrop={() => handleTaskDrop(category, task.id)}
                   className={`flex items-center justify-between bg-white rounded-xl px-4 py-3 border shadow-sm transition-colors ${
-                    dragItem?.type === 'task' && dragItem.id === task.id ? 'border-blue-400 opacity-50' : 'border-gray-100'
-                  }`}>
+                    dragItem?.type === 'task' && dragItem.id === task.id && sortMode ? 'border-blue-400 opacity-50' : 'border-gray-100'
+                  } ${sortMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-gray-300 cursor-grab active:cursor-grabbing">⠿</span>
+                    {sortMode && <span className="text-xs text-gray-300">⠿</span>}
                     <div className="w-2 h-2 rounded-full flex-shrink-0"
                       style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
                     <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
