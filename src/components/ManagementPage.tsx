@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import type { Task, TaskFormData, Category } from '../types'
 import { WEEKDAY_KEYS, WEEKDAY_LABELS, CATEGORY_COLOR_PAIRS } from '../types'
 import { TaskForm } from './TaskForm'
@@ -11,12 +11,12 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
-  arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
@@ -48,33 +48,7 @@ function getCategoryColor(categories: Category[], name: string): string {
   return categories.find((c) => c.name === name)?.color ?? '#4CAF50'
 }
 
-function SortableCategory({
-  catName,
-  children,
-}: {
-  catName: string
-  children: React.ReactNode
-}) {
-  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
-    id: catName,
-  })
-  const style = transform
-    ? { transform: CSS.Transform.toString(transform), transition }
-    : undefined
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`rounded-lg p-3 transition-shadow ${isDragging ? 'shadow-lg opacity-50' : ''}`}
-      {...(listeners ? { ...listeners } : {})}
-      {...(attributes ? { ...attributes } : {})}
-    >
-      {children}
-    </div>
-  )
-}
-
-function SortableTask({
+function SortableTaskItem({
   taskId,
   children,
 }: {
@@ -89,8 +63,8 @@ function SortableTask({
     : undefined
   return (
     <div ref={setNodeRef} style={style} className={isDragging ? 'opacity-40' : ''}
-      {...(listeners ? { ...listeners } : {})}
-      {...(attributes ? { ...attributes } : {})}
+      {...listeners}
+      {...attributes}
     >
       {children}
     </div>
@@ -117,6 +91,7 @@ export function ManagementPage({
   const [taskOrder, setTaskOrder] = useState<Record<string, string[]>>({})
   const [saving, setSaving] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const catDragRef = useRef<{ name: string } | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -208,6 +183,13 @@ export function ManagementPage({
     setTaskOrder({})
   }
 
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      setActiveId(String(event.active.id))
+    },
+    []
+  )
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       setActiveId(null)
@@ -217,16 +199,7 @@ export function ManagementPage({
       const activeIdStr = String(active.id)
       const overIdStr = String(over.id)
 
-      // Category reorder
-      if (catOrder.includes(activeIdStr)) {
-        if (!catOrder.includes(overIdStr)) return
-        const oldIdx = catOrder.indexOf(activeIdStr)
-        const newIdx = catOrder.indexOf(overIdStr)
-        setCatOrder(arrayMove(catOrder, oldIdx, newIdx))
-        return
-      }
-
-      // Task reorder (possibly cross-category)
+      // Only handle task reorder (categories handled separately)
       let sourceCat: string | null = null
       for (const [cat, ids] of Object.entries(taskOrder)) {
         if (ids.includes(activeIdStr)) {
@@ -236,38 +209,31 @@ export function ManagementPage({
       }
       if (!sourceCat) return
 
-      // Determine target category and index
+      // Find target
       let targetCat: string | null = null
       let targetIdx = -1
-
-      if (taskOrder[overIdStr]) {
-        // over is a task ID — look up its category
-        for (const [cat, ids] of Object.entries(taskOrder)) {
-          const idx = ids.indexOf(overIdStr)
-          if (idx >= 0) {
-            targetCat = cat
-            targetIdx = idx
-            break
-          }
+      for (const [cat, ids] of Object.entries(taskOrder)) {
+        const idx = ids.indexOf(overIdStr)
+        if (idx >= 0) {
+          targetCat = cat
+          targetIdx = idx
+          break
         }
-      } else if (catOrder.includes(overIdStr)) {
-        // over is a category name directly — drop at end of that category
+      }
+      if (targetCat === null && catOrder.includes(overIdStr)) {
         targetCat = overIdStr
         targetIdx = (taskOrder[targetCat] ?? []).length
       }
-
       if (!targetCat || targetIdx < 0) return
 
       const newTaskOrder = { ...taskOrder }
 
-      // Remove from source
       const sourceIds = [...(newTaskOrder[sourceCat] ?? [])]
       const fromIdx = sourceIds.indexOf(activeIdStr)
       if (fromIdx < 0) return
       sourceIds.splice(fromIdx, 1)
       newTaskOrder[sourceCat] = sourceIds
 
-      // Insert into target
       const targetIds = [...(newTaskOrder[targetCat] ?? [])]
       let insertIdx = targetIdx
       if (sourceCat === targetCat && fromIdx < targetIdx) {
@@ -281,12 +247,27 @@ export function ManagementPage({
     [catOrder, taskOrder]
   )
 
-  const handleDragStart = useCallback(
-    (event: { active: { id: unknown } }) => {
-      setActiveId(String(event.active.id))
-    },
-    []
-  )
+  const handleCatDragStart = (catName: string) => {
+    catDragRef.current = { name: catName }
+  }
+
+  const handleCatDragOver = (e: React.DragEvent, catName: string) => {
+    e.preventDefault()
+    const src = catDragRef.current
+    if (!src || src.name === catName) return
+    const names = [...catOrder]
+    const fromIdx = names.indexOf(src.name)
+    const toIdx = names.indexOf(catName)
+    if (fromIdx < 0 || toIdx < 0) return
+    names.splice(fromIdx, 1)
+    names.splice(toIdx, 0, src.name)
+    catDragRef.current = { name: src.name }
+    setCatOrder(names)
+  }
+
+  const handleCatDragEnd = () => {
+    catDragRef.current = null
+  }
 
   const handleDeleteTask = async (id: string) => {
     try {
@@ -363,107 +344,6 @@ export function ManagementPage({
     }
     return catOrder.map((name) => [name, map.get(name) ?? []] as [string, Task[]])
   }, [sortMode, catOrder, taskOrder, categories, tasks])
-
-  const renderContent = () => {
-    const catContent = displayGroups.map(([category, catTasks]) => {
-      const cat = categories.find((c) => c.name === category)
-      const isActiveCat = activeId !== null && catOrder.includes(activeId) && activeId !== category
-
-      if (sortMode) {
-        return (
-          <SortableCategory key={category} catName={category}>
-            <div className={`rounded-lg transition-colors ${isActiveCat ? 'border-2 border-dashed border-blue-300' : ''}`}>
-              <div
-                className="flex items-center justify-between mb-2 cursor-grab active:cursor-grabbing"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-300 text-sm">⠿</span>
-                  <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
-                  <span className="text-xs text-gray-400">{catTasks.length}</span>
-                </div>
-                <div className="flex gap-1 items-center">
-                  <button onClick={() => cat && openCategoryEdit(cat)}
-                    className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
-                  <button onClick={() => setConfirmDeleteCat(category)}
-                    className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
-                </div>
-              </div>
-              <SortableContext items={taskOrder[category] ?? []} strategy={verticalListSortingStrategy}>
-                <div className="space-y-1">
-                  {(taskOrder[category] ?? []).map((taskId) => {
-                    const task = catTasks.find((t) => t.id === taskId)
-                    if (!task) return null
-                    return (
-                      <SortableTask key={task.id} taskId={task.id}>
-                        <div
-                          className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm cursor-grab active:cursor-grabbing"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs text-gray-300">⠿</span>
-                            <div className="w-2 h-2 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
-                            <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
-                            <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
-                          </div>
-                          <div className="flex gap-2 flex-shrink-0 pointer-events-auto">
-                            <button onClick={() => setEditingTask(task)}
-                              className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1">編集</button>
-                            <button onClick={() => setConfirmDelete(task.id)}
-                              className="text-xs text-red-400 hover:text-red-600 px-2 py-1">削除</button>
-                          </div>
-                        </div>
-                      </SortableTask>
-                    )
-                  })}
-                  {activeId && !catOrder.includes(activeId) && !(taskOrder[category] ?? []).includes(activeId) && (
-                    <div className="h-12 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/30" />
-                  )}
-                </div>
-              </SortableContext>
-            </div>
-          </SortableCategory>
-        )
-      }
-
-      return (
-        <section key={category} className="rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
-              <span className="text-xs text-gray-400">{catTasks.length}</span>
-            </div>
-            <div className="flex gap-1 items-center">
-              <button onClick={() => cat && openCategoryEdit(cat)}
-                className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
-              <button onClick={() => setConfirmDeleteCat(category)}
-                className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
-            </div>
-          </div>
-          <div className="space-y-1">
-            {catTasks.map((task) => (
-              <div key={task.id}
-                className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
-                  <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => setEditingTask(task)}
-                    className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1">編集</button>
-                  <button onClick={() => setConfirmDelete(task.id)}
-                    className="text-xs text-red-400 hover:text-red-600 px-2 py-1">削除</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )
-    })
-
-    return catContent
-  }
 
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-6 pb-24">
@@ -625,41 +505,120 @@ export function ManagementPage({
         </div>
       )}
 
-      {sortMode ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext items={catOrder} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3">
-              {renderContent()}
-            </div>
-          </SortableContext>
-          <DragOverlay>
-            {activeId && !catOrder.includes(activeId) && (
-              <div className="bg-white rounded-xl px-4 py-3 border-2 border-blue-400 shadow-lg">
+      <div className="space-y-3">
+        {displayGroups.map(([category, catTasks]) => {
+          const cat = categories.find((c) => c.name === category)
+
+          if (sortMode) {
+            return (
+              <section key={category}
+                draggable
+                onDragStart={() => handleCatDragStart(category)}
+                onDragOver={(e) => handleCatDragOver(e, category)}
+                onDragEnd={handleCatDragEnd}
+                className={`rounded-lg p-3 transition-colors ${
+                  catDragRef.current && catDragRef.current.name !== category ? 'border-2 border-dashed border-blue-300' : ''
+                }`}>
+                <div className="flex items-center justify-between mb-2 cursor-grab active:cursor-grabbing">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-300 text-sm">⠿</span>
+                    <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
+                    <span className="text-xs text-gray-400">{catTasks.length}</span>
+                  </div>
+                  <div className="flex gap-1 items-center">
+                    <button onClick={() => cat && openCategoryEdit(cat)}
+                      className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
+                    <button onClick={() => setConfirmDeleteCat(category)}
+                      className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
+                  </div>
+                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={taskOrder[category] ?? []} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-1">
+                      {(taskOrder[category] ?? []).map((taskId) => {
+                        const task = catTasks.find((t) => t.id === taskId)
+                        if (!task) return null
+                        return (
+                          <SortableTaskItem key={task.id} taskId={task.id}>
+                            <div className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm cursor-grab active:cursor-grabbing">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs text-gray-300">⠿</span>
+                                <div className="w-2 h-2 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
+                                <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
+                                <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
+                              </div>
+                              <div className="flex gap-2 flex-shrink-0">
+                                <button onClick={(e) => { e.stopPropagation(); setEditingTask(task) }}
+                                  className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1">編集</button>
+                                <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(task.id) }}
+                                  className="text-xs text-red-400 hover:text-red-600 px-2 py-1">削除</button>
+                              </div>
+                            </div>
+                          </SortableTaskItem>
+                        )
+                      })}
+                    </div>
+                  </SortableContext>
+                  <DragOverlay>
+                    {activeId && (
+                      <div className="bg-white rounded-xl px-4 py-3 border-2 border-blue-400 shadow-lg">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-300">⠿</span>
+                          <span className="text-sm font-medium text-gray-800">
+                            {tasksMap.get(activeId)?.name ?? ''}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </DragOverlay>
+                </DndContext>
+              </section>
+            )
+          }
+
+          return (
+            <section key={category} className="rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-300">⠿</span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {tasksMap.get(activeId)?.name ?? ''}
-                  </span>
+                  <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
+                  <span className="text-xs text-gray-400">{catTasks.length}</span>
+                </div>
+                <div className="flex gap-1 items-center">
+                  <button onClick={() => cat && openCategoryEdit(cat)}
+                    className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
+                  <button onClick={() => setConfirmDeleteCat(category)}
+                    className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
                 </div>
               </div>
-            )}
-            {activeId && catOrder.includes(activeId) && (
-              <div className="bg-white rounded-lg px-4 py-2 border-2 border-blue-400 shadow-lg">
-                <span className="text-sm font-bold">{activeId}</span>
+              <div className="space-y-1">
+                {catTasks.map((task) => (
+                  <div key={task.id}
+                    className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
+                      <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
+                      <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button onClick={() => setEditingTask(task)}
+                        className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1">編集</button>
+                      <button onClick={() => setConfirmDelete(task.id)}
+                        className="text-xs text-red-400 hover:text-red-600 px-2 py-1">削除</button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
-          </DragOverlay>
-        </DndContext>
-      ) : (
-        <div className="space-y-3">
-          {renderContent()}
-        </div>
-      )}
+            </section>
+          )
+        })}
+      </div>
 
       {grouped.uncategorized.length > 0 && (
         <section>
