@@ -232,12 +232,6 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
         style={{ gridColumn: 1, gridRow: row }}>
         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
         <span className="text-gray-800 font-medium truncate text-sm" title={task.name}>{task.name}</span>
-        {noteTaskIds?.has(task.id) && (
-          <button onClick={(e) => { e.stopPropagation(); onViewNotes?.(task.id) }}
-            className="text-xs text-blue-400 hover:text-blue-600 flex-shrink-0 ml-auto" title="メモを見る">
-            📝
-          </button>
-        )}
       </div>
     )
 
@@ -320,13 +314,16 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
               <input type="checkbox" checked={checked}
                 onChange={() => toggleGroup(group.days)}
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
-              {noteTaskIds?.has(task.id) && (
+              {checked && log && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onViewNotes?.(task.id) }}
-                  className="text-xs text-blue-400 hover:text-blue-600 ml-1"
+                  className="ml-1 p-0.5 rounded hover:bg-gray-100"
                   title="メモを見る"
                 >
-                  🗒️
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                    <rect x="3" y="3" width="14" height="18" rx="2" stroke="#3B82F6" strokeWidth="1.5" fill="none" />
+                    <path d="M7 7h8M7 11h8" stroke="#3B82F6" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
                 </button>
               )}
               {checked && log && (
@@ -415,7 +412,11 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
         className={`absolute z-40 w-8 cursor-col-resize`}
         aria-hidden
       >
-        <div className="h-full w-0.5 bg-gray-300 mx-auto" />
+        <div className="h-full w-1 mx-auto" style={{
+              position: 'relative',
+              left: '-50%',
+              opacity: .13
+          }} />
       </div>
     </div>
   )
