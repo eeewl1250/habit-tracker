@@ -171,7 +171,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor }
     row++
     cells.push(
       <div key={`cat-${category}`}
-        className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold border-b border-gray-200"
+        className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold border-b border-gray-200 border-r"
         style={{ gridColumn: 1, gridRow: row, backgroundColor: bg, color }}>
         {category}
       </div>
@@ -189,7 +189,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor }
 
     cells.push(
       <div key={`name-${task.id}`}
-        className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0"
+        className="flex items-center gap-1.5 px-3 py-2 border-b border-r border-gray-100 bg-white sticky left-0 z-10 min-w-0"
         style={{ gridColumn: 1, gridRow: row }}>
         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
         <span className="text-gray-800 font-medium truncate text-sm">{task.name}</span>
@@ -255,7 +255,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor }
             <div className="relative flex items-center gap-1">
               <input type="checkbox" checked={checked}
                 onChange={() => toggleGroup(group.days)}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer z-10" />
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
               {checked && log && (
                 <MemoIcon log={log} onMemoUpdate={() => {}} />
               )}
