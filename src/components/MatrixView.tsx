@@ -284,6 +284,15 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
               <input type="checkbox" checked={checked}
                 onChange={() => toggleGroup(group.days)}
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+              {noteTaskIds?.has(task.id) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onViewNotes?.(task.id) }}
+                  className="text-xs text-blue-400 hover:text-blue-600 ml-1"
+                  title="メモを見る"
+                >
+                  🗒️
+                </button>
+              )}
               {checked && log && (
                 <MemoIcon log={log} onMemoUpdate={() => {}} />
               )}
@@ -327,6 +336,15 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
                 else { await logs.check(task.id, dateStr); onChecked?.(task.id, task.name) }
               }}
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+            {noteTaskIds?.has(task.id) && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onViewNotes?.(task.id) }}
+                className="text-xs text-blue-400 hover:text-blue-600 ml-1"
+                title="メモを見る"
+              >
+                🗒️
+              </button>
+            )}
             {checked && <MemoIcon log={log} onMemoUpdate={() => {}} />}
           </div>
         )
