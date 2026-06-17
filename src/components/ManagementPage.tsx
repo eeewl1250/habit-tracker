@@ -45,6 +45,7 @@ export function ManagementPage({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [confirmDeleteCat, setConfirmDeleteCat] = useState<string | null>(null)
   const [editingCat, setEditingCat] = useState<Category | null>(null)
+  const [dragItem, setDragItem] = useState<{ type: 'cat'; name: string } | { type: 'task'; id: string; cat: string } | null>(null)
   const [editCatName, setEditCatName] = useState('')
   const [editCatPairIdx, setEditCatPairIdx] = useState(0)
 
@@ -65,8 +66,12 @@ export function ManagementPage({
         uncategorized.push(t)
       }
     }
+    const catOrder = categories.map((c) => c.name)
+    const sorted = [...map.entries()].sort(
+      ([a], [b]) => catOrder.indexOf(a) - catOrder.indexOf(b)
+    )
     return {
-      grouped: [...map.entries()].sort(([a], [b]) => a.localeCompare(b)),
+      grouped: sorted,
       uncategorized,
     }
   }, [activeTasks, categories])
@@ -131,34 +136,39 @@ export function ManagementPage({
     }
   }
 
-  const moveCategory = async (name: string, dir: -1 | 1) => {
-    const idx = categories.findIndex((c) => c.name === name)
-    if (idx < 0) return
-    const target = idx + dir
-    if (target < 0 || target >= categories.length) return
-    const swapped = [...categories]
-    ;[swapped[idx], swapped[target]] = [swapped[target], swapped[idx]]
+  const handleCatDrop = async (catName: string) => {
+    if (!dragItem || dragItem.type !== 'cat' || dragItem.name === catName) return
+    const names = categories.map((c) => c.name)
+    const fromIdx = names.indexOf(dragItem.name)
+    const toIdx = names.indexOf(catName)
+    if (fromIdx < 0 || toIdx < 0) return
+    names.splice(fromIdx, 1)
+    names.splice(toIdx, 0, dragItem.name)
     try {
-      await updateCategoriesOrder(swapped.map((c) => c.name))
+      await updateCategoriesOrder(names)
       onRefresh()
     } catch (e) {
       console.error(e)
     }
+    setDragItem(null)
   }
 
-  const moveTask = async (ids: string[], taskId: string, dir: -1 | 1) => {
-    const idx = ids.indexOf(taskId)
-    if (idx < 0) return
-    const target = idx + dir
-    if (target < 0 || target >= ids.length) return
-    const swapped = [...ids]
-    ;[swapped[idx], swapped[target]] = [swapped[target], swapped[idx]]
+  const handleTaskDrop = async (catName: string, targetTaskId: string) => {
+    if (!dragItem || dragItem.type !== 'task' || dragItem.id === targetTaskId) return
+    const ids = grouped.grouped.find(([c]) => c === catName)?.[1].map((t) => t.id) ?? []
+    if (dragItem.cat !== catName) return
+    const fromIdx = ids.indexOf(dragItem.id)
+    const toIdx = ids.indexOf(targetTaskId)
+    if (fromIdx < 0 || toIdx < 0) return
+    ids.splice(fromIdx, 1)
+    ids.splice(toIdx, 0, dragItem.id)
     try {
-      await updateTasksOrder(swapped)
+      await updateTasksOrder(ids)
       onRefresh()
     } catch (e) {
       console.error(e)
     }
+    setDragItem(null)
   }
 
   return (
@@ -296,19 +306,19 @@ export function ManagementPage({
 
       {grouped.grouped.map(([category, catTasks]) => {
         const cat = categories.find((c) => c.name === category)
-        const taskIds = catTasks.map((t) => t.id)
         return (
-          <section key={category}>
+          <section key={category}
+            draggable
+            onDragStart={() => setDragItem({ type: 'cat', name: category })}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => handleCatDrop(category)}
+            className={`rounded-lg p-3 transition-colors ${dragItem?.type === 'cat' && dragItem.name !== category ? 'border-2 border-dashed border-blue-300' : ''}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
                 <span className="text-xs text-gray-400">{catTasks.length}</span>
               </div>
               <div className="flex gap-1 items-center">
-                <button onClick={() => moveCategory(category, -1)}
-                  className="text-xs text-gray-400 hover:text-gray-600 px-1" title="上に移動">↑</button>
-                <button onClick={() => moveCategory(category, 1)}
-                  className="text-xs text-gray-400 hover:text-gray-600 px-1" title="下に移動">↓</button>
                 <button onClick={() => cat && openCategoryEdit(cat)}
                   className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
                 <button onClick={() => setConfirmDeleteCat(category)}
@@ -318,12 +328,15 @@ export function ManagementPage({
             <div className="space-y-1">
               {catTasks.map((task) => (
                 <div key={task.id}
-                  className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+                  draggable
+                  onDragStart={() => setDragItem({ type: 'task', id: task.id, cat: category })}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleTaskDrop(category, task.id)}
+                  className={`flex items-center justify-between bg-white rounded-xl px-4 py-3 border shadow-sm transition-colors ${
+                    dragItem?.type === 'task' && dragItem.id === task.id ? 'border-blue-400 opacity-50' : 'border-gray-100'
+                  }`}>
                   <div className="flex items-center gap-2 min-w-0">
-                    <button onClick={() => moveTask(taskIds, task.id, -1)}
-                      className="text-xs text-gray-300 hover:text-gray-500 px-0.5" title="上に移動">↑</button>
-                    <button onClick={() => moveTask(taskIds, task.id, 1)}
-                      className="text-xs text-gray-300 hover:text-gray-500 px-0.5" title="下に移動">↓</button>
+                    <span className="text-xs text-gray-300 cursor-grab active:cursor-grabbing">⠿</span>
                     <div className="w-2 h-2 rounded-full flex-shrink-0"
                       style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
                     <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>

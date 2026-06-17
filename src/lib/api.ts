@@ -110,7 +110,7 @@ export async function fetchCategories(): Promise<Category[]> {
   const { data, error } = await supabase
     .from('categories')
     .select('*')
-    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true })
   if (error) throw error
 
   if (data && data.length > 0) return data
