@@ -28,7 +28,7 @@ export function HeatmapView({ tasks, logs }: HeatmapViewProps) {
   const weeks = useMemo(() => {
     const map = new Map<string, { date: Date; count: number; day: number }[]>()
     for (const day of yearDays) {
-      const weekKey = String(getWeek(day, { weekStartsOn: 0 }))
+      const weekKey = String(getWeek(day, { weekStartsOn: 1 }))
       if (!map.has(weekKey)) map.set(weekKey, [])
       const logsForDay = logs.logs.filter(
         (l) => l.date === format(day, 'yyyy-MM-dd')
@@ -42,7 +42,10 @@ export function HeatmapView({ tasks, logs }: HeatmapViewProps) {
     return Array.from(map.entries())
       .sort(([a], [b]) => Number(a) - Number(b))
       .map(([, days]) => {
-        const sorted = [...days].sort((a, b) => a.day - b.day)
+        const sorted = [...days].sort((a, b) => {
+          const order = [1, 2, 3, 4, 5, 6, 0]
+          return order.indexOf(a.day) - order.indexOf(b.day)
+        })
         return sorted
       })
   }, [yearDays, logs.logs])
