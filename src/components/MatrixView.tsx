@@ -252,41 +252,30 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
         const today = isToday(firstDay)
         const span = group.days.length
 
-        if (group.partial) {
-          cells.push(
-            <div key={`g-${task.id}-${gi}`}
-              className={`flex items-center justify-center py-2 border-b border-gray-100 min-w-0 bg-gray-50/50`}
-              style={{ gridColumn: `${group.startIdx + 2} / span ${span}`, gridRow: row }}>
-              <div className="absolute inset-0 mx-1 my-1 rounded-md border border-dashed border-gray-200" />
-              <span className="relative text-[9px] text-gray-300">{format(group.days[0], 'd')}-{format(group.days[group.days.length - 1], 'd')}</span>
-            </div>
-          )
-        } else {
-          cells.push(
-            <div key={`g-${task.id}-${gi}`}
-              className={`relative flex items-center justify-center py-2 border-b border-gray-100 min-w-0 ${
-                today ? 'bg-blue-50' : 'bg-white'
-              }`}
-              style={{ gridColumn: `${group.startIdx + 2} / span ${span}`, gridRow: row }}>
-              <div className={`absolute inset-0 mx-1 my-1 rounded-md border-2 border-dashed ${
-                checked ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200'
-              }`} />
-              <div className="relative flex items-center gap-1">
-                <input type="checkbox" checked={checked}
-                  onChange={() => toggleGroup(group.days)}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
-                {checked && log && (
-                  <MemoIcon log={log} onMemoUpdate={() => {}} />
-                )}
-              </div>
-              {group.days.length > 1 && (
-                <span className="absolute bottom-0.5 text-[9px] text-gray-400">
-                  {format(group.days[0], 'd')}-{format(group.days[group.days.length - 1], 'd')}
-                </span>
+        cells.push(
+          <div key={`g-${task.id}-${gi}`}
+            className={`relative flex items-center justify-center py-2 border-b border-gray-100 min-w-0 ${
+              today ? 'bg-blue-50' : (group.partial ? 'bg-gray-50/50' : 'bg-white')
+            }`}
+            style={{ gridColumn: `${group.startIdx + 2} / span ${span}`, gridRow: row }}>
+            <div className={`absolute inset-0 mx-1 my-1 rounded-md border-2 border-dashed ${
+              checked ? 'border-blue-200 bg-blue-50/50' : (group.partial ? 'border-gray-300' : 'border-gray-200')
+            }`} />
+            <div className="relative flex items-center gap-1">
+              <input type="checkbox" checked={checked}
+                onChange={() => toggleGroup(group.days)}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+              {checked && log && (
+                <MemoIcon log={log} onMemoUpdate={() => {}} />
               )}
             </div>
-          )
-        }
+            {group.days.length > 1 && (
+              <span className="absolute bottom-0.5 text-[9px] text-gray-400">
+                {format(group.days[0], 'd')}-{format(group.days[group.days.length - 1], 'd')}
+              </span>
+            )}
+          </div>
+        )
       })
     } else {
       days.forEach((day, di) => {
