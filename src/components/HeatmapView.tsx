@@ -105,7 +105,7 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
             {task.name}
           </span>
           <span className="text-xs text-gray-400">
-            {stats.completed}日/{stats.total}
+            {stats.completed}日/{stats.total}日
           </span>
         </div>
         <div className="flex gap-0.5">
