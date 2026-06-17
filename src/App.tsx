@@ -52,7 +52,7 @@ function App() {
       format(dates.dateRange.start, 'yyyy-MM-dd'),
       format(dates.dateRange.end, 'yyyy-MM-dd')
     )
-  }, [dates.dateRange.start, dates.dateRange.end, logs])
+  }, [dates.dateRange.start, dates.dateRange.end, logs.load])
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {})
