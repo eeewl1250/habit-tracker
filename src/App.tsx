@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { format } from 'date-fns'
 import { Header } from './components/Header'
 import { MatrixView } from './components/MatrixView'
@@ -16,12 +16,16 @@ function App() {
   const dates = useViewDates()
   const [showForm, setShowForm] = useState(false)
 
-  useEffect(() => {
+  const loadLogs = useCallback(() => {
     logs.load(
       format(dates.dateRange.start, 'yyyy-MM-dd'),
       format(dates.dateRange.end, 'yyyy-MM-dd')
     )
   }, [dates.dateRange.start, dates.dateRange.end])
+
+  useEffect(() => {
+    loadLogs()
+  }, [loadLogs])
 
   const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
 
@@ -37,7 +41,7 @@ function App() {
       />
 
       <main className="max-w-5xl mx-auto">
-        <div className="flex justify-end p-4">
+        <div className="hidden md:flex justify-end p-4">
           <button
             onClick={() => setShowForm(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -71,8 +75,8 @@ function App() {
             <div className="block md:hidden">
               <MobileView
                 tasks={tasks.tasks}
-                day={dates.baseDate}
                 logs={logs}
+                onReloadLogs={loadLogs}
               />
             </div>
             <div className="hidden md:block">
@@ -85,6 +89,13 @@ function App() {
           </>
         )}
       </main>
+
+      <button
+        onClick={() => setShowForm(true)}
+        className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
+      >
+        +
+      </button>
     </div>
   )
 }

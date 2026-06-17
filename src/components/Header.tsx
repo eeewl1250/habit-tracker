@@ -25,42 +25,42 @@ export function Header({
   onViewModeChange,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-200 px-4 py-3">
-      <div className="flex items-center justify-between max-w-5xl mx-auto">
-        <h1 className="text-lg font-bold text-gray-800 whitespace-nowrap">
+    <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-200">
+      <div className="flex items-center justify-between px-4 py-2 md:py-3 max-w-5xl mx-auto">
+        <h1 className="text-base md:text-lg font-bold text-gray-800 whitespace-nowrap">
           習慣トラッカー
         </h1>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           <button
             onClick={onPrev}
-            className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded"
+            className="px-2 py-1 md:px-2 text-gray-600 hover:bg-gray-100 rounded min-w-[36px] min-h-[36px] flex items-center justify-center"
           >
             &lt;
           </button>
           <button
             onClick={onToday}
-            className="px-3 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded border border-gray-300"
+            className="hidden md:block px-3 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded border border-gray-300"
           >
             今日
           </button>
-          <span className="text-sm font-medium text-gray-800 min-w-[180px] text-center">
+          <span className="text-xs md:text-sm font-medium text-gray-800 min-w-[140px] md:min-w-[180px] text-center">
             {rangeLabel}
           </span>
           <button
             onClick={onNext}
-            className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded"
+            className="px-2 py-1 md:px-2 text-gray-600 hover:bg-gray-100 rounded min-w-[36px] min-h-[36px] flex items-center justify-center"
           >
             &gt;
           </button>
         </div>
 
-        <nav className="flex gap-1">
+        <nav className="flex gap-0.5 md:gap-1">
           {modes.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => onViewModeChange(key)}
-              className={`px-3 py-1 text-sm rounded transition-colors ${
+              className={`px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
                 viewMode === key
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-600 hover:bg-gray-100'
