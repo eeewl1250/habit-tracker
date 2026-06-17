@@ -105,7 +105,7 @@ export function ManagementPage({
   }
 
   const openNewCategory = () => {
-    setEditingCat({ name: '', color: CATEGORY_COLOR_PAIRS[0].dot, bg_color: CATEGORY_COLOR_PAIRS[0].bg })
+    setEditingCat({ name: '', color: CATEGORY_COLOR_PAIRS[0].dot, bg_color: CATEGORY_COLOR_PAIRS[0].bg, sort_order: 0 })
     setEditCatName('')
     setEditCatPairIdx(0)
   }
@@ -294,7 +294,7 @@ export function ManagementPage({
         </div>
       )}
 
-      {grouped.grouped.map(([category, catTasks], gi) => {
+      {grouped.grouped.map(([category, catTasks]) => {
         const cat = categories.find((c) => c.name === category)
         const taskIds = catTasks.map((t) => t.id)
         return (
@@ -316,7 +316,7 @@ export function ManagementPage({
               </div>
             </div>
             <div className="space-y-1">
-              {catTasks.map((task, ti) => (
+              {catTasks.map((task) => (
                 <div key={task.id}
                   className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2 min-w-0">

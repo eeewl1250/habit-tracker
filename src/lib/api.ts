@@ -134,8 +134,6 @@ export async function fetchCategories(): Promise<Category[]> {
 
 export async function createCategory(name: string, color: string): Promise<void> {
   const pair = CATEGORY_COLOR_PAIRS.find((p) => p.dot === color) ?? CATEGORY_COLOR_PAIRS[0]
-  const { data: existing } = await supabase.from('categories').select('count').single()
-  const sort_order = existing ? 0 : 0
   const { error } = await supabase.from('categories').upsert({ name, color, bg_color: pair.bg, sort_order: 0 })
   if (error) throw error
 }
