@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { Task, DailyLog, TaskFormData, Category } from '../types'
+import { CATEGORY_COLOR_PAIRS } from '../types'
 
 // ── Tasks ──
 
@@ -123,21 +124,22 @@ export async function fetchCategories(): Promise<Category[]> {
   if (taskErr) throw taskErr
   const names = [...new Set(taskData.map((r) => r.category).filter(Boolean))]
   if (names.length === 0) return []
-  const defaults: Category[] = names.map((name, i) => ({
-    name,
-    color: ['#E8F5E9','#E3F2FD','#FFF3E0','#F3E5F5','#E0F7FA','#FCE4EC','#F1F8E9','#FFF8E1','#E8EAF6','#FBE9E7'][i % 10],
-  }))
-  await supabase.from('categories').upsert(defaults.map((c) => ({ name: c.name, color: c.color })))
+  const defaults: Category[] = names.map((name, i) => {
+    const pair = CATEGORY_COLOR_PAIRS[i % CATEGORY_COLOR_PAIRS.length]
+    return { name, color: pair.dot, bg_color: pair.bg }
+  })
+  await supabase.from('categories').upsert(defaults)
   return defaults
 }
 
 export async function createCategory(name: string, color: string): Promise<void> {
-  const { error } = await supabase.from('categories').upsert({ name, color })
+  const pair = CATEGORY_COLOR_PAIRS.find((p) => p.dot === color) ?? CATEGORY_COLOR_PAIRS[0]
+  const { error } = await supabase.from('categories').upsert({ name, color, bg_color: pair.bg })
   if (error) throw error
 }
 
-export async function updateCategoryColor(name: string, color: string): Promise<void> {
-  const { error } = await supabase.from('categories').update({ color }).eq('name', name)
+export async function updateCategoryColor(name: string, color: string, bg_color: string): Promise<void> {
+  const { error } = await supabase.from('categories').update({ color, bg_color }).eq('name', name)
   if (error) throw error
 }
 

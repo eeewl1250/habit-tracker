@@ -5,6 +5,7 @@ export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats'
 export interface Category {
   name: string
   color: string
+  bg_color: string
 }
 
 export interface Task {
@@ -22,10 +23,17 @@ export interface Task {
   updated_at: string
 }
 
-export const CATEGORY_COLORS = [
-  '#E8F5E9', '#E3F2FD', '#FFF3E0', '#F3E5F5',
-  '#E0F7FA', '#FCE4EC', '#F1F8E9', '#FFF8E1',
-  '#E8EAF6', '#FBE9E7',
+export const CATEGORY_COLOR_PAIRS = [
+  { dot: '#4CAF50', bg: '#E8F5E9' },
+  { dot: '#2196F3', bg: '#E3F2FD' },
+  { dot: '#FF9800', bg: '#FFF3E0' },
+  { dot: '#9C27B0', bg: '#F3E5F5' },
+  { dot: '#00BCD4', bg: '#E0F7FA' },
+  { dot: '#E91E63', bg: '#FCE4EC' },
+  { dot: '#8BC34A', bg: '#F1F8E9' },
+  { dot: '#FFC107', bg: '#FFF8E1' },
+  { dot: '#3F51B5', bg: '#E8EAF6' },
+  { dot: '#FF5722', bg: '#FBE9E7' },
 ]
 
 export interface DailyLog {

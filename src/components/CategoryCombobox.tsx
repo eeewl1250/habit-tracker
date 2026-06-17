@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Category } from '../types'
-import { CATEGORY_COLORS } from '../types'
+import { CATEGORY_COLOR_PAIRS } from '../types'
 import { createCategory } from '../lib/api'
 
 interface CategoryComboboxProps {
@@ -45,7 +45,7 @@ export function CategoryCombobox({
   const select = async (val: string) => {
     const exists = options.find((o) => o.name === val)
     if (!exists && val.trim()) {
-      const color = CATEGORY_COLORS[options.length % CATEGORY_COLORS.length]
+      const color = CATEGORY_COLOR_PAIRS[options.length % CATEGORY_COLOR_PAIRS.length].dot
       try { await createCategory(val.trim(), color) } catch { /* ignore */ }
     }
     setInput(val)
@@ -55,7 +55,7 @@ export function CategoryCombobox({
   }
 
   const usedColors = new Set(options.map((c) => c.color))
-  const availColor = CATEGORY_COLORS.find((c) => !usedColors.has(c)) ?? CATEGORY_COLORS[options.length % CATEGORY_COLORS.length]
+  const availColor = CATEGORY_COLOR_PAIRS.find((p) => !usedColors.has(p.dot))?.dot ?? CATEGORY_COLOR_PAIRS[options.length % CATEGORY_COLOR_PAIRS.length].dot
 
   return (
     <div ref={ref} className="relative">

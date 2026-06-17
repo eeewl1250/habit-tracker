@@ -1,7 +1,8 @@
 -- カテゴリ（色はカテゴリに所属）
 CREATE TABLE IF NOT EXISTS categories (
   name TEXT PRIMARY KEY,
-  color TEXT NOT NULL DEFAULT '#E8F5E9',
+  color TEXT NOT NULL DEFAULT '#4CAF50',
+  bg_color TEXT NOT NULL DEFAULT '#E8F5E9',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -51,6 +52,7 @@ CREATE TRIGGER tasks_updated_at
 -- 既存DBがある場合のマイグレーション
 -- ALTER TABLE tasks ADD COLUMN IF NOT EXISTS base_date DATE;
 -- ALTER TABLE daily_logs ADD COLUMN IF NOT EXISTS memo TEXT;
+-- ALTER TABLE categories ADD COLUMN IF NOT EXISTS bg_color TEXT NOT NULL DEFAULT '#E8F5E9';
 
 -- RLS: 全員が全データを読み書き（個人利用のため）
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;

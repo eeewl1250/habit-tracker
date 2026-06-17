@@ -16,6 +16,7 @@ interface MatrixViewProps {
     undo: (logId: string) => Promise<void>
   }
   categoryColor: Map<string, string>
+  categoryBgColor: Map<string, string>
 }
 
 const dayColors: Record<string, string> = {
@@ -28,6 +29,10 @@ function getBaseDate(task: Task): Date {
   return task.base_date ? new Date(task.base_date + 'T00:00:00') : new Date(task.created_at)
 }
 
+function getPeriodStart(diff: number, freq: number): number {
+  return Math.floor(diff / freq) * freq
+}
+
 function isDayActive(task: Task, date: Date): boolean {
   if (task.period_type === 'weekday' && task.weekdays) {
     const days: string[] = JSON.parse(task.weekdays)
@@ -36,7 +41,7 @@ function isDayActive(task: Task, date: Date): boolean {
   if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
     const base = getBaseDate(task)
     const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
-    return diff >= 0 && diff % task.frequency === 0
+    return diff === getPeriodStart(diff, task.frequency)
   }
   return true
 }
@@ -62,8 +67,8 @@ function getLogInRange(logs: DailyLog[], taskId: string, start: string, end: str
 }
 
 function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
-  if (task.category) return categoryColor.get(task.category) ?? '#E8F5E9'
-  return '#E8F5E9'
+  if (task.category) return categoryColor.get(task.category) ?? '#4CAF50'
+  return '#4CAF50'
 }
 
 function MemoIcon({ log, onMemoUpdate }: { log?: DailyLog; onMemoUpdate: () => void }) {
@@ -121,7 +126,7 @@ function MemoIcon({ log, onMemoUpdate }: { log?: DailyLog; onMemoUpdate: () => v
   )
 }
 
-export function MatrixView({ tasks, days, logs, categoryColor }: MatrixViewProps) {
+export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor }: MatrixViewProps) {
   const grouped = useMemo(() => {
     const active = tasks.filter((t) => t.status === 'active')
     const map = new Map<string, Task[]>()
@@ -158,24 +163,28 @@ export function MatrixView({ tasks, days, logs, categoryColor }: MatrixViewProps
         ))}
 
         {grouped.grouped.map(([category, catTasks]) => (
-          <CategoryGroup key={category} category={category} tasks={catTasks} days={days} logs={logs} categoryColor={categoryColor} />
+          <CategoryGroup key={category} category={category} tasks={catTasks} days={days} logs={logs}
+            categoryColor={categoryColor} categoryBgColor={categoryBgColor} />
         ))}
         {grouped.uncategorized.length > 0 && (
-          <CategoryGroup category="" tasks={grouped.uncategorized} days={days} logs={logs} categoryColor={categoryColor} />
+          <CategoryGroup category="" tasks={grouped.uncategorized} days={days} logs={logs}
+            categoryColor={categoryColor} categoryBgColor={categoryBgColor} />
         )}
       </div>
     </div>
   )
 }
 
-function CategoryGroup({ category, tasks, days, logs, categoryColor }: {
-  category: string; tasks: Task[]; days: Date[]; logs: MatrixViewProps['logs']; categoryColor: Map<string, string>
+function CategoryGroup({ category, tasks, days, logs, categoryColor, categoryBgColor }: {
+  category: string; tasks: Task[]; days: Date[]; logs: MatrixViewProps['logs']
+  categoryColor: Map<string, string>; categoryBgColor: Map<string, string>
 }) {
   const span = 1 + days.length
+  const bg = categoryBgColor.get(category) ?? '#F9FAFB'
   return (
     <>
-      <div className="px-3 py-1.5 text-xs font-bold text-gray-500 bg-gray-50 border-b border-gray-200 sticky left-0"
-        style={{ gridColumn: `span ${span}` }}>
+      <div className="px-3 py-1.5 text-xs font-bold text-gray-500 border-b border-gray-200 sticky left-0"
+        style={{ gridColumn: `span ${span}`, backgroundColor: bg }}>
         {category || 'その他'}
       </div>
       {tasks.map((task) => (
@@ -185,7 +194,9 @@ function CategoryGroup({ category, tasks, days, logs, categoryColor }: {
   )
 }
 
-function TaskRow({ task, days, logs, categoryColor }: { task: Task; days: Date[]; logs: MatrixViewProps['logs']; categoryColor: Map<string, string> }) {
+function TaskRow({ task, days, logs, categoryColor }: {
+  task: Task; days: Date[]; logs: MatrixViewProps['logs']; categoryColor: Map<string, string>
+}) {
   const color = getTaskColor(task, categoryColor)
 
   if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
@@ -234,25 +245,24 @@ function TaskRow({ task, days, logs, categoryColor }: { task: Task; days: Date[]
   )
 }
 
-function FrequencyRow({ task, days, logs, color }: { task: Task; days: Date[]; logs: MatrixViewProps['logs']; color: string }) {
+function FrequencyRow({ task, days, logs, color }: {
+  task: Task; days: Date[]; logs: MatrixViewProps['logs']; color: string
+}) {
   const freq = task.frequency!
   const base = getBaseDate(task)
 
-  // build groups of days
   const groups: { days: Date[]; startIdx: number }[] = []
   for (let i = 0; i < days.length; i++) {
     const day = days[i]
     const diff = Math.round((day.getTime() - base.getTime()) / 86400000)
-    if (diff >= 0 && diff % freq === 0) {
+    const periodStart = getPeriodStart(diff, freq)
+    if (diff === periodStart) {
       const groupDays = [day]
       for (let j = 1; j < freq && i + j < days.length; j++) {
         groupDays.push(days[i + j])
       }
       groups.push({ days: groupDays, startIdx: i })
       i += freq - 1
-    } else if (diff < 0 && i === 0) {
-      // before base_date, treat as group of size 1
-      groups.push({ days: [day], startIdx: i })
     }
   }
 
@@ -272,8 +282,7 @@ function FrequencyRow({ task, days, logs, color }: { task: Task; days: Date[]; l
 
   const toggleGroup = async (group: { days: Date[] }) => {
     const start = format(group.days[0], 'yyyy-MM-dd')
-    const end = format(group.days[group.days.length - 1], 'yyyy-MM-dd')
-    const existing = getLogInRange(logsList, task.id, start, end)
+    const existing = getLogInRange(logsList, task.id, start, start)
     if (existing) {
       await logs.undo(existing.id)
     } else {
@@ -301,11 +310,9 @@ function FrequencyRow({ task, days, logs, color }: { task: Task; days: Date[]; l
               today ? 'bg-blue-50' : 'bg-white'
             }`}
             style={{ gridColumn: `span ${span}` }}>
-            {/* group visual background */}
             <div className={`absolute inset-0 mx-1 my-1 rounded-md border-2 border-dashed ${
               checked ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200'
             }`} />
-            {/* checkbox */}
             <div className="relative flex items-center gap-1">
               <input type="checkbox" checked={checked}
                 onChange={() => toggleGroup(group)}
@@ -314,7 +321,6 @@ function FrequencyRow({ task, days, logs, color }: { task: Task; days: Date[]; l
                 <MemoIcon log={log} onMemoUpdate={() => {}} />
               )}
             </div>
-            {/* group label */}
             {group.days.length > 1 && (
               <span className="absolute bottom-0.5 text-[9px] text-gray-400">
                 {format(group.days[0], 'd')}-{format(group.days[group.days.length - 1], 'd')}

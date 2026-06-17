@@ -11,7 +11,7 @@ import { useTasks } from './hooks/useTasks'
 import { useLogs } from './hooks/useLogs'
 import { useViewDates } from './hooks/useViewDates'
 import { fetchCategories } from './lib/api'
-import type { Category } from './types'
+import type { Category, ViewMode } from './types'
 
 function App() {
   const tasks = useTasks()
@@ -26,6 +26,17 @@ function App() {
     for (const c of categories) map.set(c.name, c.color)
     return map
   }, [categories])
+
+  const categoryBgColor = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of categories) map.set(c.name, c.bg_color)
+    return map
+  }, [categories])
+
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setShowManagement(false)
+    dates.setViewMode(mode)
+  }, [dates])
 
   const loadLogs = useCallback(() => {
     logs.load(
@@ -56,7 +67,7 @@ function App() {
         onPrev={dates.goPrev}
         onNext={dates.goNext}
         onToday={dates.goToday}
-        onViewModeChange={dates.setViewMode}
+        onViewModeChange={handleViewModeChange}
         managing={showManagement}
         onManage={handleManage}
       />
@@ -126,6 +137,7 @@ function App() {
                     days={dates.days}
                     logs={logs}
                     categoryColor={categoryColor}
+                    categoryBgColor={categoryBgColor}
                   />
                 </div>
               </>

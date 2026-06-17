@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { Task, TaskFormData, Category } from '../types'
-import { WEEKDAY_KEYS, WEEKDAY_LABELS, CATEGORY_COLORS } from '../types'
+import { WEEKDAY_KEYS, WEEKDAY_LABELS, CATEGORY_COLOR_PAIRS } from '../types'
 import { TaskForm } from './TaskForm'
 import { renameCategory, deleteCategory, updateCategoryColor } from '../lib/api'
 
@@ -29,7 +29,7 @@ function periodLabel(task: Task): string {
 }
 
 function getCategoryColor(categories: Category[], name: string): string {
-  return categories.find((c) => c.name === name)?.color ?? '#E8F5E9'
+  return categories.find((c) => c.name === name)?.color ?? '#4CAF50'
 }
 
 export function ManagementPage({
@@ -43,10 +43,10 @@ export function ManagementPage({
   const [showAdd, setShowAdd] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const [renamingCat, setRenamingCat] = useState<string | null>(null)
-  const [newCatName, setNewCatName] = useState('')
   const [confirmDeleteCat, setConfirmDeleteCat] = useState<string | null>(null)
-  const [editingCatColor, setEditingCatColor] = useState<string | null>(null)
+  const [editingCat, setEditingCat] = useState<Category | null>(null)
+  const [editCatName, setEditCatName] = useState('')
+  const [editCatPairIdx, setEditCatPairIdx] = useState(0)
 
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const disabledTasks = tasks.filter((t) => t.status === 'disabled')
@@ -67,18 +67,6 @@ export function ManagementPage({
       uncategorized,
     }
   }, [activeTasks])
-
-  const handleRenameCategory = async (oldName: string) => {
-    if (!newCatName.trim() || newCatName === oldName) return
-    try {
-      await renameCategory(oldName, newCatName.trim())
-      setRenamingCat(null)
-      setNewCatName('')
-      onRefresh()
-    } catch (e) {
-      console.error('Failed to rename category', e)
-    }
-  }
 
   const handleDeleteTask = async (id: string) => {
     try {
@@ -106,13 +94,27 @@ export function ManagementPage({
     }
   }
 
-  const handleColorChange = async (catName: string, color: string) => {
+  const openCategoryEdit = (cat: Category) => {
+    const idx = CATEGORY_COLOR_PAIRS.findIndex((p) => p.dot === cat.color)
+    setEditingCat(cat)
+    setEditCatName(cat.name)
+    setEditCatPairIdx(idx >= 0 ? idx : 0)
+  }
+
+  const saveCategoryEdit = async () => {
+    if (!editingCat) return
+    const name = editCatName.trim()
+    if (!name) return
+    const pair = CATEGORY_COLOR_PAIRS[editCatPairIdx]
     try {
-      await updateCategoryColor(catName, color)
-      setEditingCatColor(null)
+      if (name !== editingCat.name) {
+        await renameCategory(editingCat.name, name)
+      }
+      await updateCategoryColor(name, pair.dot, pair.bg)
+      setEditingCat(null)
       onRefresh()
     } catch (e) {
-      console.error('Failed to update category color', e)
+      console.error('Failed to save category', e)
     }
   }
 
@@ -158,6 +160,59 @@ export function ManagementPage({
         </div>
       )}
 
+      {editingCat && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-4">カテゴリ編集</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ名</label>
+                <input
+                  type="text"
+                  value={editCatName}
+                  onChange={(e) => setEditCatName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">色</label>
+                <div className="flex gap-3 flex-wrap">
+                  {CATEGORY_COLOR_PAIRS.map((pair, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setEditCatPairIdx(i)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all"
+                      style={{
+                        backgroundColor: pair.bg,
+                        borderColor: editCatPairIdx === i ? pair.dot : 'transparent',
+                      }}
+                    >
+                      <span className="w-4 h-4 rounded-full" style={{ backgroundColor: pair.dot }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={saveCategoryEdit}
+                  className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  保存
+                </button>
+                <button
+                  onClick={() => setEditingCat(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {(confirmDelete || confirmDeleteCat) && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
@@ -188,76 +243,45 @@ export function ManagementPage({
         </div>
       )}
 
-      {grouped.grouped.map(([category, catTasks]) => (
-        <section key={category}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getCategoryColor(categories, category) }} />
-              <h3 className="text-sm font-bold text-gray-500 tracking-wide">{category}</h3>
-              <span className="text-xs text-gray-400">{catTasks.length}</span>
-            </div>
-            <div className="flex gap-1 items-center">
-              {renamingCat === category ? (
-                <form onSubmit={(e) => { e.preventDefault(); handleRenameCategory(category) }}
-                  className="flex gap-1">
-                  <input
-                    type="text"
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    className="w-28 px-2 py-1 text-xs border border-gray-300 rounded"
-                    autoFocus
-                  />
-                  <button type="submit" className="text-xs text-blue-600 px-2">保存</button>
-                  <button type="button" onClick={() => setRenamingCat(null)}
-                    className="text-xs text-gray-400 px-2">取消</button>
-                </form>
-              ) : (
-                <>
-                  {editingCatColor === category ? (
-                    <div className="flex gap-1">
-                      {CATEGORY_COLORS.map((c) => (
-                        <button key={c} onClick={() => handleColorChange(category, c)}
-                          className={`w-4 h-4 rounded-full border ${getCategoryColor(categories, category) === c ? 'border-gray-800 scale-125' : 'border-transparent'}`}
-                          style={{ backgroundColor: c }} />
-                      ))}
-                      <button onClick={() => setEditingCatColor(null)}
-                        className="text-xs text-gray-400 px-1">完了</button>
-                    </div>
-                  ) : (
-                    <>
-                      <button onClick={() => setEditingCatColor(category)}
-                        className="text-xs text-gray-400 hover:text-gray-600 px-1">色</button>
-                      <button onClick={() => { setRenamingCat(category); setNewCatName(category) }}
-                        className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
-                      <button onClick={() => setConfirmDeleteCat(category)}
-                        className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-          <div className="space-y-1">
-            {catTasks.map((task) => (
-              <div key={task.id}
-                className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
-                  <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => setEditingTask(task)}
-                    className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1">編集</button>
-                  <button onClick={() => setConfirmDelete(task.id)}
-                    className="text-xs text-red-400 hover:text-red-600 px-2 py-1">削除</button>
-                </div>
+      {grouped.grouped.map(([category, catTasks]) => {
+        const cat = categories.find((c) => c.name === category)
+        return (
+          <section key={category}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getCategoryColor(categories, category) }} />
+                <h3 className="text-sm font-bold text-gray-500 tracking-wide">{category}</h3>
+                <span className="text-xs text-gray-400">{catTasks.length}</span>
               </div>
-            ))}
-          </div>
-        </section>
-      ))}
+              <div className="flex gap-1 items-center">
+                <button onClick={() => cat && openCategoryEdit(cat)}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
+                <button onClick={() => setConfirmDeleteCat(category)}
+                  className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              {catTasks.map((task) => (
+                <div key={task.id}
+                  className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: getCategoryColor(categories, task.category) }} />
+                    <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => setEditingTask(task)}
+                      className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1">編集</button>
+                    <button onClick={() => setConfirmDelete(task.id)}
+                      className="text-xs text-red-400 hover:text-red-600 px-2 py-1">削除</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )
+      })}
 
       {grouped.uncategorized.length > 0 && (
         <section>
@@ -268,7 +292,7 @@ export function ManagementPage({
                 className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: '#E8F5E9' }} />
+                    style={{ backgroundColor: '#4CAF50' }} />
                   <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
                   <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
                 </div>

@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react'
 import { format, addDays, subDays, isToday } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import type { Task, DailyLog } from '../types'
-import { WEEKDAY_MAP } from '../types'
 import { useLogs } from '../hooks/useLogs'
 import { updateLogMemo } from '../lib/api'
 
@@ -18,26 +17,33 @@ function getBaseDate(task: Task): Date {
   return task.base_date ? new Date(task.base_date + 'T00:00:00') : new Date(task.created_at)
 }
 
+function getPeriodStart(diff: number, freq: number): number {
+  return Math.floor(diff / freq) * freq
+}
+
 function isDayActive(task: Task, date: Date): boolean {
   if (task.period_type === 'weekday' && task.weekdays) {
     const days: string[] = JSON.parse(task.weekdays)
-    return days.some((k) => WEEKDAY_MAP[k] === date.getDay())
+    return days.some((k) => +k === date.getDay())
   }
   if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
-    const base = getBaseDate(task)
-    const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
-    return diff >= 0 && diff % task.frequency === 0
+    return true
   }
   return true
+}
+
+function getPeriodDiff(date: Date, base: Date, freq: number): { periodStart: number; startMs: number; endMs: number } {
+  const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
+  const ps = getPeriodStart(diff, freq)
+  const startMs = base.getTime() + ps * 86400000
+  const endMs = startMs + (freq - 1) * 86400000
+  return { periodStart: ps, startMs, endMs }
 }
 
 function isCheckedInRange(logsList: DailyLog[], taskId: string, task: Task, date: Date, dateStr: string): boolean {
   if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
     const base = getBaseDate(task)
-    const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
-    const periodStart = Math.floor(diff / task.frequency) * task.frequency
-    const startMs = base.getTime() + periodStart * 86400000
-    const endMs = startMs + (task.frequency - 1) * 86400000
+    const { startMs, endMs } = getPeriodDiff(date, base, task.frequency)
     return logsList.some((l) => {
       if (l.task_id !== taskId) return false
       const t = new Date(l.date).getTime()
@@ -47,29 +53,23 @@ function isCheckedInRange(logsList: DailyLog[], taskId: string, task: Task, date
   return logsList.some((l) => l.task_id === taskId && l.date === dateStr)
 }
 
-function getLogForDate(logsList: DailyLog[], taskId: string, dateStr: string): DailyLog | undefined {
-  return logsList.find((l) => l.task_id === taskId && l.date === dateStr)
-}
-
 function getLogForPeriod(logsList: DailyLog[], taskId: string, task: Task, date: Date): DailyLog | undefined {
   if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
     const base = getBaseDate(task)
-    const diff = Math.round((date.getTime() - base.getTime()) / 86400000)
-    const periodStart = Math.floor(diff / task.frequency) * task.frequency
-    const startMs = base.getTime() + periodStart * 86400000
-    const endMs = startMs + (task.frequency - 1) * 86400000
+    const { startMs, endMs } = getPeriodDiff(date, base, task.frequency)
     return logsList.find((l) => {
       if (l.task_id !== taskId) return false
       const t = new Date(l.date).getTime()
       return t >= startMs && t <= endMs
     })
   }
-  return getLogForDate(logsList, taskId, format(date, 'yyyy-MM-dd'))
+  const dateStr = format(date, 'yyyy-MM-dd')
+  return logsList.find((l) => l.task_id === taskId && l.date === dateStr)
 }
 
 function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
-  if (task.category) return categoryColor.get(task.category) ?? '#E8F5E9'
-  return '#E8F5E9'
+  if (task.category) return categoryColor.get(task.category) ?? '#4CAF50'
+  return '#4CAF50'
 }
 
 function TaskCard({ task, checked, log, onToggle, categoryColor }: {
@@ -193,8 +193,7 @@ export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage 
     if (checked) {
       if (task.period_type === 'frequency' && task.frequency && task.frequency > 1) {
         const base = getBaseDate(task)
-        const diff = Math.round((currentDay.getTime() - base.getTime()) / 86400000)
-        const periodStart = Math.floor(diff / task.frequency) * task.frequency
+        const { periodStart } = getPeriodDiff(currentDay, base, task.frequency)
         const startStr = format(new Date(base.getTime() + periodStart * 86400000), 'yyyy-MM-dd')
         const existing = logs.logs.find((l) =>
           l.task_id === task.id && l.date === startStr
@@ -255,7 +254,7 @@ export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage 
         {grouped.grouped.map(([category, catTasks]) => (
           <section key={category}>
             <div className="flex items-center gap-2 mb-2 px-1">
-              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: categoryColor.get(category) ?? '#E8F5E9' }} />
+              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: categoryColor.get(category) ?? '#4CAF50' }} />
               <h3 className="text-sm font-bold text-gray-500 tracking-wide">{category}</h3>
             </div>
             <div className="space-y-2">
@@ -268,7 +267,6 @@ export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage 
                 ) : (
                   <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
                     <div className="flex items-center gap-3.5">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getTaskColor(task, categoryColor) }} />
                       <div className="w-7 h-7 rounded-full border-2 border-gray-300 flex-shrink-0" />
                       <span className="text-[15px] font-medium text-gray-800">{task.name}</span>
                       <span className="text-xs text-gray-400 ml-auto">対象外</span>
