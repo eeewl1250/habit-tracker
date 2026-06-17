@@ -43,6 +43,7 @@ export function MatrixView({ tasks, days, logs }: MatrixViewProps) {
       className="grid gap-0 text-sm"
       style={{ gridTemplateColumns: `160px repeat(${days.length}, minmax(28px, 1fr))` }}
     >
+      <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200" />
       {days.map((day) => (
         <div
           key={day.toISOString()}
