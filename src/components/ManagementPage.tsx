@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import type { Task, TaskFormData, Category } from '../types'
 import { WEEKDAY_KEYS, WEEKDAY_LABELS, CATEGORY_COLOR_PAIRS } from '../types'
 import { TaskForm } from './TaskForm'
-import { renameCategory, deleteCategory, updateCategoryColor } from '../lib/api'
+import { createCategory, renameCategory, deleteCategory, updateCategoryColor } from '../lib/api'
 
 interface ManagementPageProps {
   tasks: Task[]
@@ -101,16 +101,26 @@ export function ManagementPage({
     setEditCatPairIdx(idx >= 0 ? idx : 0)
   }
 
+  const openNewCategory = () => {
+    setEditingCat({ name: '', color: CATEGORY_COLOR_PAIRS[0].dot, bg_color: CATEGORY_COLOR_PAIRS[0].bg })
+    setEditCatName('')
+    setEditCatPairIdx(0)
+  }
+
   const saveCategoryEdit = async () => {
     if (!editingCat) return
     const name = editCatName.trim()
     if (!name) return
     const pair = CATEGORY_COLOR_PAIRS[editCatPairIdx]
     try {
-      if (name !== editingCat.name) {
-        await renameCategory(editingCat.name, name)
+      if (editingCat.name === '') {
+        await createCategory(name, pair.dot)
+      } else {
+        if (name !== editingCat.name) {
+          await renameCategory(editingCat.name, name)
+        }
+        await updateCategoryColor(name, pair.dot, pair.bg)
       }
-      await updateCategoryColor(name, pair.dot, pair.bg)
       setEditingCat(null)
       onRefresh()
     } catch (e) {
@@ -120,14 +130,22 @@ export function ManagementPage({
 
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-6 pb-24">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-bold text-gray-800">タスク管理</h2>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          + 新規タスク
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={openNewCategory}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+          >
+            + カテゴリ追加
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            + 新規タスク
+          </button>
+        </div>
       </div>
 
       {showAdd && (
@@ -163,7 +181,7 @@ export function ManagementPage({
       {editingCat && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-bold mb-4">カテゴリ編集</h3>
+            <h3 className="text-lg font-bold mb-4">{editingCat?.name ? 'カテゴリ編集' : 'カテゴリ追加'}</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ名</label>
@@ -249,8 +267,7 @@ export function ManagementPage({
           <section key={category}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getCategoryColor(categories, category) }} />
-                <h3 className="text-sm font-bold text-gray-500 tracking-wide">{category}</h3>
+                <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
                 <span className="text-xs text-gray-400">{catTasks.length}</span>
               </div>
               <div className="flex gap-1 items-center">

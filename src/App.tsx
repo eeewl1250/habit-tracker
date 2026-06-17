@@ -126,7 +126,7 @@ function App() {
             )}
 
             {dates.viewMode === 'heatmap' && (
-              <HeatmapView tasks={tasks.tasks} />
+              <HeatmapView tasks={tasks.tasks} categoryColor={categoryColor} />
             )}
             {dates.viewMode === 'stats' && <StatsView />}
 
