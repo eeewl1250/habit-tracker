@@ -110,7 +110,7 @@ export async function fetchCategories(): Promise<Category[]> {
   const { data, error } = await supabase
     .from('categories')
     .select('*')
-    .order('name', { ascending: true })
+    .order('sort_order', { ascending: true })
   if (error) throw error
 
   if (data && data.length > 0) return data
@@ -126,7 +126,7 @@ export async function fetchCategories(): Promise<Category[]> {
   if (names.length === 0) return []
   const defaults = names.map((name, i) => {
     const pair = CATEGORY_COLOR_PAIRS[i % CATEGORY_COLOR_PAIRS.length]
-    return { name, color: pair.dot, bg_color: pair.bg }
+    return { name, color: pair.dot, bg_color: pair.bg, sort_order: i }
   }) as Category[]
   await supabase.from('categories').upsert(defaults)
   return defaults
@@ -139,11 +139,14 @@ export async function createCategory(name: string, color: string): Promise<void>
 }
 
 export async function updateCategoriesOrder(names: string[]): Promise<void> {
-  const updates = names.map((name, i) => ({ name, sort_order: i }))
-  const { error } = await supabase
-    .from('categories')
-    .upsert(updates, { onConflict: 'name' })
-  if (error) throw error
+  // Update sort_order for each category by name
+  for (let i = 0; i < names.length; i++) {
+    const { error } = await supabase
+      .from('categories')
+      .update({ sort_order: i })
+      .eq('name', names[i])
+    if (error) throw error
+  }
 }
 
 export async function updateTasksOrder(ids: string[]): Promise<void> {
