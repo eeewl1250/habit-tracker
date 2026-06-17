@@ -113,15 +113,6 @@ function TaskCard({ task, checked, log, onToggle, categoryColor, hasNote, onView
               checked ? 'text-blue-700 line-through decoration-2' : 'text-gray-800'
             }`}>
               {task.name}
-              {checked && hasNote && (
-                <button onClick={(e) => { e.stopPropagation(); onViewNotes?.(task.id) }}
-                  className="ml-1 p-0.5 rounded hover:bg-gray-100" title="メモを見る">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                    <rect x="3" y="3" width="14" height="18" rx="2" stroke="#3B82F6" strokeWidth="1.5" fill="none" />
-                    <path d="M7 7h8M7 11h8" stroke="#3B82F6" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </button>
-              )}
             </span>
             {freqInfo && (
               <span className="text-[11px] text-gray-400 mt-0.5 block">

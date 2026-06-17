@@ -105,15 +105,7 @@ export function HeatmapView({ tasks, categoryColor, noteTaskIds, onViewNotes }: 
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
           <span className="text-sm font-medium text-gray-700 whitespace-nowrap min-w-[80px] flex items-center gap-1">
             {task.name}
-            {noteTaskIds?.has(task.id) && (
-              <button onClick={() => onViewNotes?.(task.id)}
-                className="ml-1 p-0.5 rounded hover:bg-gray-100" title="メモを見る">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                  <rect x="3" y="3" width="14" height="18" rx="2" stroke="#3B82F6" strokeWidth="1.5" fill="none" />
-                  <path d="M7 7h8M7 11h8" stroke="#3B82F6" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
-            )}
+            
           </span>
           <span className="text-xs text-gray-400">
             {stats.completed}日/{stats.total}日
