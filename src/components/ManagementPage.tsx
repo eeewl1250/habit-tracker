@@ -6,7 +6,7 @@ import { createCategory, renameCategory, deleteCategory, updateCategoryColor, up
 import {
   getTaskCategory,
   UNCATEGORIZED_KEY,
-  calculateTaskCategoryUpdates,
+  calculateCategoryUpdates,
   initializeTaskOrder,
 } from './ManagementPage.helpers'
 import {
@@ -145,22 +145,30 @@ export function ManagementPage({
     try {
       await updateCategoriesOrder(catOrder)
 
-      const updates = calculateTaskCategoryUpdates(grouped.grouped, taskOrder)
-      for (const { taskId, newCategory } of updates) {
-        await updateTask(taskId, { category: newCategory ?? '' })
+      const updates = calculateCategoryUpdates(grouped.grouped, taskOrder)
+      for (const [taskId, newCategory] of updates) {
+        await updateTask(taskId, { category: newCategory })
       }
 
-      const allCats = new Set([...catOrder, UNCATEGORIZED_KEY])
-      const updatePromises = Array.from(allCats).map((cat) => {
+      const updatePromises: Promise<void>[] = []
+      for (const cat of catOrder) {
         const ids = taskOrder[cat] ?? []
-        return ids.length > 0 ? updateTasksOrder(ids) : Promise.resolve()
-      })
+        if (ids.length > 0) {
+          updatePromises.push(updateTasksOrder(ids))
+        }
+      }
+
+      if (taskOrder[UNCATEGORIZED_KEY]?.length > 0) {
+        updatePromises.push(updateTasksOrder(taskOrder[UNCATEGORIZED_KEY]))
+      }
+
       await Promise.all(updatePromises)
 
       onRefresh()
       setSortMode(false)
     } catch (e) {
       console.error('Failed to save sort order', e)
+      alert('保存に失敗しました: ' + (e instanceof Error ? e.message : '不明なエラー'))
     } finally {
       setSaving(false)
     }
