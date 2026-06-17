@@ -20,16 +20,28 @@ const dayColors: Record<string, string> = {
 }
 
 export function MatrixView({ tasks, days, logs }: MatrixViewProps) {
-  const activeTasks = tasks.filter((t) => t.status === 'active')
+  const span = 1 + days.length
 
-  const gridCols = useMemo(() => {
-    return `160px repeat(${days.length}, minmax(28px, 1fr))`
-  }, [days.length])
+  const grouped = useMemo(() => {
+    const active = tasks.filter((t) => t.status === 'active')
+    const map = new Map<string, Task[]>()
+    const uncategorized: Task[] = []
+    for (const t of active) {
+      if (t.category) {
+        if (!map.has(t.category)) map.set(t.category, [])
+        map.get(t.category)!.push(t)
+      } else {
+        uncategorized.push(t)
+      }
+    }
+    const sorted = [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
+    return { grouped: sorted, uncategorized }
+  }, [tasks])
 
   return (
     <div
       className="grid gap-0 text-sm"
-      style={{ gridTemplateColumns: gridCols }}
+      style={{ gridTemplateColumns: `160px repeat(${days.length}, minmax(28px, 1fr))` }}
     >
       {days.map((day) => (
         <div
@@ -41,19 +53,57 @@ export function MatrixView({ tasks, days, logs }: MatrixViewProps) {
         </div>
       ))}
 
+      {grouped.grouped.map(([category, catTasks]) => (
+        <CategoryGroup
+          key={category}
+          category={category}
+          tasks={catTasks}
+          days={days}
+          logs={logs}
+          span={span}
+        />
+      ))}
 
+      {grouped.uncategorized.length > 0 && (
+        <CategoryGroup
+          category=""
+          tasks={grouped.uncategorized}
+          days={days}
+          logs={logs}
+          span={span}
+        />
+      )}
+    </div>
+  )
+}
 
-      {activeTasks.map((task) => (
+function CategoryGroup({
+  category,
+  tasks,
+  days,
+  logs,
+  span,
+}: {
+  category: string
+  tasks: Task[]
+  days: Date[]
+  logs: MatrixViewProps['logs']
+  span: number
+}) {
+  return (
+    <>
+      <div
+        className="px-3 py-1.5 text-xs font-bold text-gray-500 bg-gray-50 border-b border-gray-200 sticky left-0"
+        style={{ gridColumn: `span ${span}` }}
+      >
+        {category || 'その他'}
+      </div>
+      {tasks.map((task) => (
         <>
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0">
+          <div className="flex items-center px-3 py-2 border-b border-gray-100 bg-white sticky left-0 z-10 min-w-0">
             <span className="text-gray-800 font-medium truncate text-sm">
               {task.name}
             </span>
-            {task.category && (
-              <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">
-                {task.category}
-              </span>
-            )}
           </div>
           {days.map((day) => {
             const dateStr = format(day, 'yyyy-MM-dd')
@@ -82,6 +132,6 @@ export function MatrixView({ tasks, days, logs }: MatrixViewProps) {
           })}
         </>
       ))}
-    </div>
+    </>
   )
 }
