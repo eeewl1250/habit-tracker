@@ -4,6 +4,12 @@ import { WEEKDAY_KEYS, WEEKDAY_LABELS, CATEGORY_COLOR_PAIRS } from '../types'
 import { TaskForm } from './TaskForm'
 import { createCategory, renameCategory, deleteCategory, updateCategoryColor, updateCategoriesOrder, updateTasksOrder, updateTask } from '../lib/api'
 import {
+  getTaskCategory,
+  UNCATEGORIZED_KEY,
+  calculateTaskCategoryUpdates,
+  initializeTaskOrder,
+} from './ManagementPage.helpers'
+import {
   DndContext,
   DragOverlay,
   closestCenter,
@@ -129,10 +135,7 @@ export function ManagementPage({
 
   const enterSortMode = () => {
     setCatOrder(categories.map((c) => c.name))
-    const to: Record<string, string[]> = {}
-    for (const [cat, ts] of grouped.grouped) {
-      to[cat] = ts.map((t) => t.id)
-    }
+    const to = initializeTaskOrder(grouped.grouped, grouped.uncategorized)
     setTaskOrder(to)
     setSortMode(true)
   }
@@ -141,33 +144,19 @@ export function ManagementPage({
     setSaving(true)
     try {
       await updateCategoriesOrder(catOrder)
-      for (const [cat, ids] of Object.entries(taskOrder)) {
-        if (ids.length > 0) {
-          const origCatTasks = grouped.grouped.find(([c]) => c === cat)?.[1] ?? []
-          const origIds = new Set(origCatTasks.map((t) => t.id))
-          for (const id of ids) {
-            if (!origIds.has(id)) {
-              const t = tasksMap.get(id)
-              if (t && t.category !== cat) {
-                await updateTask(id, { category: cat })
-              }
-            }
-          }
-          for (const origId of origIds) {
-            if (!ids.includes(origId) && origCatTasks.some((t) => t.id === origId)) {
-              const t = tasksMap.get(origId)
-              if (t && t.category === cat) {
-                await updateTask(origId, { category: '' })
-              }
-            }
-          }
-        }
+
+      const updates = calculateTaskCategoryUpdates(grouped.grouped, taskOrder)
+      for (const { taskId, newCategory } of updates) {
+        await updateTask(taskId, { category: newCategory ?? '' })
       }
-      for (const [, ids] of Object.entries(taskOrder)) {
-        if (ids.length > 0) {
-          await updateTasksOrder(ids)
-        }
-      }
+
+      const allCats = new Set([...catOrder, UNCATEGORIZED_KEY])
+      const updatePromises = Array.from(allCats).map((cat) => {
+        const ids = taskOrder[cat] ?? []
+        return ids.length > 0 ? updateTasksOrder(ids) : Promise.resolve()
+      })
+      await Promise.all(updatePromises)
+
       onRefresh()
       setSortMode(false)
     } catch (e) {
@@ -199,38 +188,28 @@ export function ManagementPage({
       const activeIdStr = String(active.id)
       const overIdStr = String(over.id)
 
-      // Only handle task reorder (categories handled separately)
-      let sourceCat: string | null = null
-      for (const [cat, ids] of Object.entries(taskOrder)) {
-        if (ids.includes(activeIdStr)) {
-          sourceCat = cat
-          break
-        }
-      }
+      const sourceCat = getTaskCategory(activeIdStr, taskOrder)
       if (!sourceCat) return
 
-      // Find target
       let targetCat: string | null = null
       let targetIdx = -1
-      for (const [cat, ids] of Object.entries(taskOrder)) {
-        const idx = ids.indexOf(overIdStr)
-        if (idx >= 0) {
-          targetCat = cat
-          targetIdx = idx
-          break
-        }
-      }
-      if (targetCat === null && catOrder.includes(overIdStr)) {
+
+      const overCat = getTaskCategory(overIdStr, taskOrder)
+      if (overCat) {
+        targetCat = overCat
+        targetIdx = (taskOrder[targetCat] ?? []).indexOf(overIdStr)
+      } else if (catOrder.includes(overIdStr)) {
         targetCat = overIdStr
         targetIdx = (taskOrder[targetCat] ?? []).length
       }
+
       if (!targetCat || targetIdx < 0) return
 
-      const newTaskOrder = { ...taskOrder }
-
-      const sourceIds = [...(newTaskOrder[sourceCat] ?? [])]
+      const sourceIds = [...(taskOrder[sourceCat] ?? [])]
       const fromIdx = sourceIds.indexOf(activeIdStr)
       if (fromIdx < 0) return
+
+      const newTaskOrder = { ...taskOrder }
       sourceIds.splice(fromIdx, 1)
       newTaskOrder[sourceCat] = sourceIds
 
@@ -244,7 +223,7 @@ export function ManagementPage({
 
       setTaskOrder(newTaskOrder)
     },
-    [catOrder, taskOrder]
+    [taskOrder]
   )
 
   const handleCatDragStart = (catName: string) => {
@@ -331,18 +310,24 @@ export function ManagementPage({
 
   const displayGroups = useMemo(() => {
     if (!sortMode) return grouped.grouped
+
     const map = new Map<string, Task[]>()
-    for (const c of categories) map.set(c.name, [])
-    const allTasks = new Map(tasks.filter((t) => t.status === 'active').map((t) => [t.id, t]))
+    const allTasksMap = new Map(tasks.filter((t) => t.status === 'active').map((t) => [t.id, t]))
+
     for (const [cat, ids] of Object.entries(taskOrder)) {
       const ts: Task[] = []
       for (const id of ids) {
-        const t = allTasks.get(id)
+        const t = allTasksMap.get(id)
         if (t) ts.push(t)
       }
       map.set(cat, ts)
     }
-    return catOrder.map((name) => [name, map.get(name) ?? []] as [string, Task[]])
+
+    return catOrder.map((name) => [name, map.get(name) ?? []] as [string, Task[]]).concat(
+      taskOrder[UNCATEGORIZED_KEY]
+        ? [[UNCATEGORIZED_KEY, map.get(UNCATEGORIZED_KEY) ?? []] as [string, Task[]]]
+        : []
+    )
   }, [sortMode, catOrder, taskOrder, categories, tasks])
 
   return (
@@ -508,29 +493,34 @@ export function ManagementPage({
       <div className="space-y-3">
         {displayGroups.map(([category, catTasks]) => {
           const cat = categories.find((c) => c.name === category)
+          const isCategorized = category !== UNCATEGORIZED_KEY
 
           if (sortMode) {
             return (
               <section key={category}
-                draggable
-                onDragStart={() => handleCatDragStart(category)}
-                onDragOver={(e) => handleCatDragOver(e, category)}
-                onDragEnd={handleCatDragEnd}
+                draggable={isCategorized}
+                onDragStart={isCategorized ? () => handleCatDragStart(category) : undefined}
+                onDragOver={isCategorized ? (e) => handleCatDragOver(e, category) : undefined}
+                onDragEnd={isCategorized ? handleCatDragEnd : undefined}
                 className={`rounded-lg p-3 transition-colors ${
-                  catDragRef.current && catDragRef.current.name !== category ? 'border-2 border-dashed border-blue-300' : ''
+                  isCategorized && catDragRef.current && catDragRef.current.name !== category ? 'border-2 border-dashed border-blue-300' : ''
                 }`}>
                 <div className="flex items-center justify-between mb-2 cursor-grab active:cursor-grabbing">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-300 text-sm">⠿</span>
-                    <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
+                    {isCategorized && <span className="text-gray-300 text-sm">⠿</span>}
+                    <h3 className="text-sm font-bold tracking-wide" style={{ color: isCategorized ? getCategoryColor(categories, category) : '#999' }}>
+                      {isCategorized ? category : 'その他'}
+                    </h3>
                     <span className="text-xs text-gray-400">{catTasks.length}</span>
                   </div>
-                  <div className="flex gap-1 items-center">
-                    <button onClick={() => cat && openCategoryEdit(cat)}
-                      className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
-                    <button onClick={() => setConfirmDeleteCat(category)}
-                      className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
-                  </div>
+                  {isCategorized && (
+                    <div className="flex gap-1 items-center">
+                      <button onClick={() => cat && openCategoryEdit(cat)}
+                        className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
+                      <button onClick={() => setConfirmDeleteCat(category)}
+                        className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
+                    </div>
+                  )}
                 </div>
                 <DndContext
                   sensors={sensors}
@@ -586,15 +576,19 @@ export function ManagementPage({
             <section key={category} className="rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold tracking-wide" style={{ color: getCategoryColor(categories, category) }}>{category}</h3>
+                  <h3 className="text-sm font-bold tracking-wide" style={{ color: category === UNCATEGORIZED_KEY ? '#999' : getCategoryColor(categories, category) }}>
+                    {category === UNCATEGORIZED_KEY ? 'その他' : category}
+                  </h3>
                   <span className="text-xs text-gray-400">{catTasks.length}</span>
                 </div>
-                <div className="flex gap-1 items-center">
-                  <button onClick={() => cat && openCategoryEdit(cat)}
-                    className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
-                  <button onClick={() => setConfirmDeleteCat(category)}
-                    className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
-                </div>
+                {category !== UNCATEGORIZED_KEY && (
+                  <div className="flex gap-1 items-center">
+                    <button onClick={() => cat && openCategoryEdit(cat)}
+                      className="text-xs text-gray-400 hover:text-gray-600 px-1">編集</button>
+                    <button onClick={() => setConfirmDeleteCat(category)}
+                      className="text-xs text-red-400 hover:text-red-600 px-1">削除</button>
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
                 {catTasks.map((task) => (
@@ -620,29 +614,36 @@ export function ManagementPage({
         })}
       </div>
 
-      {grouped.uncategorized.length > 0 && (
-        <section>
-          <h3 className="text-sm font-bold text-gray-500 tracking-wide mb-2">その他</h3>
-          <div className="space-y-1">
-            {grouped.uncategorized.map((task) => (
-              <div key={task.id}
-                className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: '#4CAF50' }} />
-                  <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => setEditingTask(task)}
-                    className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1">編集</button>
-                  <button onClick={() => setConfirmDelete(task.id)}
-                    className="text-xs text-red-400 hover:text-red-600 px-2 py-1">削除</button>
-                </div>
+      {!sortMode && grouped.uncategorized.length > 0 && (
+        <div className="space-y-3">
+          <section className="rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold tracking-wide text-gray-500">その他</h3>
+                <span className="text-xs text-gray-400">{grouped.uncategorized.length}</span>
               </div>
-            ))}
-          </div>
-        </section>
+            </div>
+            <div className="space-y-1">
+              {grouped.uncategorized.map((task) => (
+                <div key={task.id}
+                  className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: '#4CAF50' }} />
+                    <span className="text-sm font-medium text-gray-800 truncate">{task.name}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{periodLabel(task)}</span>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => setEditingTask(task)}
+                      className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1">編集</button>
+                    <button onClick={() => setConfirmDelete(task.id)}
+                      className="text-xs text-red-400 hover:text-red-600 px-2 py-1">削除</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       )}
 
       {disabledTasks.length > 0 && (
