@@ -128,6 +128,15 @@ function MemoIcon({ log, onMemoUpdate }: { log?: DailyLog; onMemoUpdate: () => v
 }
 
 export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, onChecked }: MatrixViewProps) {
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
+  const toggleCollapse = (cat: string) => {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat); else next.add(cat)
+      return next
+    })
+  }
+
   const grouped = useMemo(() => {
     const active = tasks.filter((t) => t.status === 'active')
     const map = new Map<string, Task[]>()
@@ -182,17 +191,29 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
     setDragging(true)
   }
 
-  const cells: React.ReactNode[] = []
+  const headerCells: React.ReactNode[] = []
+  const bodyCells: React.ReactNode[] = []
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const body = bodyRef.current
+    const header = headerRef.current
+    if (!body || !header) return
+    const onScroll = () => { header.scrollLeft = body.scrollLeft }
+    body.addEventListener('scroll', onScroll)
+    return () => body.removeEventListener('scroll', onScroll)
+  }, [])
 
   // Header row
-  cells.push(
+  headerCells.push(
     <div key="corner" className="sticky top-0 left-0 z-30 bg-gray-50 border-b border-r border-gray-200"
       style={{ gridColumn: 1, gridRow: 1 }} />
   )
   days.forEach((day, di) => {
-    cells.push(
+    headerCells.push(
       <div key={`hdr-${di}`}
-        className={`text-center py-2 border-b border-gray-200 text-xs font-medium sticky top-0 z-20 ${
+        className={`text-center py-2 border-b border-gray-200 text-xs font-medium ${
           isToday(day) ? 'bg-blue-100' : 'bg-gray-50'
         } ${dayColors[format(day, 'E', { locale: ja })] ?? 'text-gray-600'}`}
         style={{ gridColumn: di + 2, gridRow: 1 }}>
@@ -206,28 +227,36 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
 
   const addCategoryRow = (category: string, bg: string, color: string) => {
     row++
-    cells.push(
+    const collapsed = collapsedCats.has(category)
+    bodyCells.push(
       <div key={`cat-${category}`}
-        className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold border-b border-gray-200 border-r"
+        className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold border-b border-gray-200 border-r flex items-center gap-1"
         style={{ gridColumn: 1, gridRow: row, backgroundColor: bg, color }}>
         {category}
       </div>
     )
-    cells.push(
+    bodyCells.push(
       <div key={`cat-fill-${category}`}
-        className="border-b border-gray-200"
-        style={{ gridColumn: `2 / ${colCount + 1}`, gridRow: row, backgroundColor: bg }} />
+        className="border-b border-gray-200 relative flex items-center"
+        style={{ gridColumn: `2 / ${colCount + 1}`, gridRow: row, backgroundColor: bg }}>
+        <button
+          onClick={() => toggleCollapse(category)}
+          className="ml-auto mr-2 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          {collapsed ? '▶' : '▼'}
+        </button>
+      </div>
     )
   }
 
-  const addTaskRow = (task: Task) => {
+  const addTaskRows = (task: Task, target: React.ReactNode[], localRow: number) => {
     row++
     const color = getTaskColor(task, categoryColor)
 
-    cells.push(
+    target.push(
       <div key={`name-${task.id}`}
         className="flex items-center gap-1.5 px-3 py-2 border-b border-r border-gray-100 bg-white sticky left-0 z-10 min-w-0"
-        style={{ gridColumn: 1, gridRow: row }}>
+        style={{ gridColumn: 1, gridRow: localRow }}>
         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
         <span className="text-gray-800 font-medium truncate text-sm" title={task.name}>{task.name}</span>
       </div>
@@ -242,7 +271,6 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
       }
       const groups: FreqGroup[] = []
 
-      // 先頭の跨ぎグループ（前の期間から続いている）
       const firstDiff = Math.round((days[0].getTime() - base.getTime()) / 86400000)
       const firstPeriodStart = getPeriodStart(firstDiff, freq)
       if (firstDiff !== firstPeriodStart) {
@@ -253,7 +281,6 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
         groups.push({ days: days.slice(0, span), startIdx: 0, partial: true, periodStart: ps, periodEnd: pe })
       }
 
-      // 通常の期間（元のロジックそのまま）
       for (let i = groups.length > 0 ? groups[0].days.length : 0; i < days.length; i++) {
         const day = days[i]
         const diff = Math.round((day.getTime() - base.getTime()) / 86400000)
@@ -299,12 +326,12 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
         const today = isToday(firstDay)
         const span = group.days.length
 
-        cells.push(
+        target.push(
           <div key={`g-${task.id}-${gi}`}
             className={`relative flex items-center justify-center py-2 border-b border-gray-100 min-w-0 ${
               today ? 'bg-blue-50' : (group.partial ? 'bg-gray-50/50' : 'bg-white')
             }`}
-            style={{ gridColumn: `${group.startIdx + 2} / span ${span}`, gridRow: row }}>
+            style={{ gridColumn: `${group.startIdx + 2} / span ${span}`, gridRow: localRow }}>
             <div className={`absolute inset-0 mx-1 my-1 rounded-md border-2 border-dashed ${
               checked ? 'border-blue-200 bg-blue-50/50' : (group.partial ? 'border-gray-300' : 'border-gray-200')
             }`} />
@@ -333,22 +360,22 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
         const log = logs.logs.find((l) => l.task_id === task.id && l.date === dateStr)
 
         if (!active) {
-          cells.push(
+          target.push(
             <div key={`cb-${task.id}-${di}`}
               className={`flex items-center justify-center py-2 border-b border-gray-100 min-w-0 ${
                 today ? 'bg-blue-50/50' : 'bg-white'
               }`}
-              style={{ gridColumn: di + 2, gridRow: row }} />
+              style={{ gridColumn: di + 2, gridRow: localRow }} />
           )
           return
         }
 
-        cells.push(
+        target.push(
           <div key={`cb-${task.id}-${di}`}
             className={`flex items-center justify-center gap-0.5 py-2 border-b border-gray-100 min-w-0 ${
               today ? 'bg-blue-50' : 'bg-white'
             }`}
-            style={{ gridColumn: di + 2, gridRow: row }}>
+            style={{ gridColumn: di + 2, gridRow: localRow }}>
             <input type="checkbox" checked={checked}
               onChange={async () => {
                 if (checked) { const id = logs.getLogId(task.id, dateStr); if (id) await logs.undo(id) }
@@ -362,25 +389,60 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
     }
   }
 
+  const renderCategory = (category: string, catTasks: Task[], bg: string, color: string) => {
+    addCategoryRow(category, bg, color)
+    const taskStartRow = row + 1
+    const taskCells: React.ReactNode[] = []
+    let localRow = 0
+    catTasks.forEach((task) => {
+      localRow++
+      addTaskRows(task, taskCells, localRow)
+    })
+    const collapsed = collapsedCats.has(category)
+    bodyCells.push(
+      <div key={`wrap-${category}`}
+        className={`transition-all duration-300 overflow-clip ${
+          collapsed ? 'max-h-0 opacity-0' : 'max-h-[2000px] opacity-100'
+        }`}
+        style={{ gridColumn: `1 / ${colCount + 1}`, gridRow: `${taskStartRow} / ${taskStartRow + catTasks.length}` }}>
+        <div
+          className="grid gap-0 text-sm"
+          style={{ gridTemplateColumns: `${nameColWidth}px repeat(${days.length}, minmax(36px, 1fr))` }}
+        >
+          {taskCells}
+        </div>
+      </div>
+    )
+  }
+
   grouped.grouped.forEach(([category, catTasks]) => {
     const bg = categoryBgColor.get(category) ?? '#F9FAFB'
     const color = categoryColor.get(category) ?? '#4CAF50'
-    addCategoryRow(category, bg, color)
-    catTasks.forEach(addTaskRow)
+    renderCategory(category, catTasks, bg, color)
   })
 
   if (grouped.uncategorized.length > 0) {
-    addCategoryRow('その他', '#F9FAFB', '#6B7280')
-    grouped.uncategorized.forEach(addTaskRow)
+    renderCategory('その他', grouped.uncategorized, '#F9FAFB', '#6B7280')
   }
 
   return (
-    <div className="overflow-x-auto relative">
-      <div
-        className="grid gap-0 text-sm"
-        style={{ gridTemplateColumns: `${nameColWidth}px repeat(${days.length}, minmax(36px, 1fr))` }}
-      >
-        {cells}
+    <div className="relative">
+      <div ref={headerRef} className="sticky top-[57px] z-20 bg-gray-50 overflow-hidden border-b border-gray-200"
+        style={{ marginTop: '-1px' }}>
+        <div
+          className="grid gap-0 text-sm"
+          style={{ gridTemplateColumns: `${nameColWidth}px repeat(${days.length}, minmax(36px, 1fr))` }}
+        >
+          {headerCells}
+        </div>
+      </div>
+      <div ref={bodyRef} className="overflow-x-auto">
+        <div
+          className="grid gap-0 text-sm"
+          style={{ gridTemplateColumns: `${nameColWidth}px repeat(${days.length}, minmax(36px, 1fr))` }}
+        >
+          {bodyCells}
+        </div>
       </div>
       {/* Vertical resizer */}
       <div

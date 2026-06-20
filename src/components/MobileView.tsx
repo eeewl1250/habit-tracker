@@ -158,6 +158,14 @@ function TaskCard({ task, checked, log, onToggle, categoryColor }: {
 }
 
 export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage = () => {}, onChecked }: MobileViewProps) {
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
+  const toggleCollapse = (cat: string) => {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat); else next.add(cat)
+      return next
+    })
+  }
   const [currentDay, setCurrentDay] = useState(new Date())
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const dateStr = format(currentDay, 'yyyy-MM-dd')
@@ -253,52 +261,73 @@ export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage 
       </div>
 
       <div className="px-4 pt-4 space-y-6 max-w-lg mx-auto">
-        {grouped.grouped.map(([category, catTasks]) => (
+        {grouped.grouped.map(([category, catTasks]) => {
+          const collapsed = collapsedCats.has(category)
+          return (
           <section key={category}>
             <div className="flex items-center gap-2 mb-2 px-1">
               <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: categoryColor.get(category) ?? '#4CAF50' }} />
               <h3 className="text-sm font-bold text-gray-500 tracking-wide">{category}</h3>
+              <button
+                onClick={() => toggleCollapse(category)}
+                className="ml-auto text-[10px] text-gray-400 hover:text-gray-600 transition-colors px-1"
+              >
+                {collapsed ? '▶' : '▼'}
+              </button>
             </div>
-            <div className="space-y-2">
-              {catTasks.map((task) => {
-                const active = isDayActive(task, currentDay)
-                const log = getLogForPeriod(logs.logs, task.id, task, currentDay)
-                const checked = active && !!log
-                return active ? (
-                  <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor} />
-                ) : (
-                  <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-7 h-7 rounded-full border-2 border-gray-300 flex-shrink-0" />
-                      <span className="text-[15px] font-medium text-gray-800">{task.name}</span>
-                      <span className="text-xs text-gray-400 ml-auto">対象外</span>
+            <div className={`overflow-clip transition-all duration-300 ${collapsed ? 'max-h-0' : 'max-h-[2000px]'}`}>
+              <div className="space-y-2">
+                {catTasks.map((task) => {
+                  const active = isDayActive(task, currentDay)
+                  const log = getLogForPeriod(logs.logs, task.id, task, currentDay)
+                  const checked = active && !!log
+                  return active ? (
+                    <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor} />
+                  ) : (
+                    <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-7 h-7 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                        <span className="text-[15px] font-medium text-gray-800">{task.name}</span>
+                        <span className="text-xs text-gray-400 ml-auto">対象外</span>
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </section>
-        ))}
+          )
+        })}
         {grouped.uncategorized.length > 0 && (
           <section>
-            <h3 className="text-sm font-bold text-gray-500 tracking-wide mb-2 px-1">その他</h3>
-            <div className="space-y-2">
-              {grouped.uncategorized.map((task) => {
-                const active = isDayActive(task, currentDay)
-                const log = getLogForPeriod(logs.logs, task.id, task, currentDay)
-                const checked = active && !!log
-                return active ? (
-                  <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor} />
-                ) : (
-                  <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-7 h-7 rounded-full border-2 border-gray-300 flex-shrink-0" />
-                      <span className="text-[15px] font-medium text-gray-800">{task.name}</span>
-                      <span className="text-xs text-gray-400 ml-auto">対象外</span>
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <h3 className="text-sm font-bold text-gray-500 tracking-wide">その他</h3>
+              <button
+                onClick={() => toggleCollapse('その他')}
+                className="ml-auto text-[10px] text-gray-400 hover:text-gray-600 transition-colors px-1"
+              >
+                {collapsedCats.has('その他') ? '▶' : '▼'}
+              </button>
+            </div>
+            <div className={`overflow-clip transition-all duration-300 ${collapsedCats.has('その他') ? 'max-h-0' : 'max-h-[2000px]'}`}>
+              <div className="space-y-2">
+                {grouped.uncategorized.map((task) => {
+                  const active = isDayActive(task, currentDay)
+                  const log = getLogForPeriod(logs.logs, task.id, task, currentDay)
+                  const checked = active && !!log
+                  return active ? (
+                    <TaskCard key={task.id} task={task} checked={checked} log={log} onToggle={() => toggleCheck(task)} categoryColor={categoryColor} />
+                  ) : (
+                    <div key={task.id} className="opacity-30 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3.5">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-7 h-7 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                        <span className="text-[15px] font-medium text-gray-800">{task.name}</span>
+                        <span className="text-xs text-gray-400 ml-auto">対象外</span>
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </section>
         )}
