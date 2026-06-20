@@ -75,3 +75,19 @@ CREATE TABLE IF NOT EXISTS notes (
 
 ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all" ON notes USING (true) WITH CHECK (true);
+
+-- 生理周期記録
+CREATE TABLE IF NOT EXISTS menstruation_logs (
+  id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  year_month TEXT NOT NULL,
+  day        INTEGER NOT NULL CHECK (day >= 1 AND day <= 31),
+  level      INTEGER NOT NULL DEFAULT 1 CHECK (level >= 1 AND level <= 3),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(year_month, day)
+);
+
+CREATE INDEX IF NOT EXISTS idx_menstruation_logs_ym ON menstruation_logs(year_month);
+
+ALTER TABLE menstruation_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON menstruation_logs USING (true) WITH CHECK (true);

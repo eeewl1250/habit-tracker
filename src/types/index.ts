@@ -1,6 +1,6 @@
 export type PeriodType = 'frequency' | 'weekday'
 export type TaskStatus = 'active' | 'disabled'
-export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes'
+export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation'
 
 export interface Note {
   id: string
@@ -73,4 +73,13 @@ export const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as
 export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 export const WEEKDAY_MAP: Record<string, number> = {
   sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+}
+
+export interface MenstruationLog {
+  id: string
+  year_month: string
+  day: number
+  level: number
+  created_at: string
+  updated_at: string
 }

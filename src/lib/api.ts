@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog } from '../types'
 import { CATEGORY_COLOR_PAIRS } from '../types'
 
 // ── Tasks ──
@@ -251,5 +251,29 @@ export async function deleteNote(id: string): Promise<void> {
     .from('notes')
     .delete()
     .eq('id', id)
+  if (error) throw error
+}
+
+// ── Menstruation Logs ──
+
+export async function fetchMenstruationLogs(yearMonths: string[]): Promise<MenstruationLog[]> {
+  if (yearMonths.length === 0) return []
+  const { data, error } = await supabase
+    .from('menstruation_logs')
+    .select('*')
+    .in('year_month', yearMonths)
+  if (error) throw error
+  return data ?? []
+}
+
+export async function upsertMenstruationLog(yearMonth: string, day: number, level: number): Promise<void> {
+  const { error } = await supabase
+    .from('menstruation_logs')
+    .upsert({ year_month: yearMonth, day, level }, { onConflict: 'year_month,day' })
+  if (error) throw error
+}
+
+export async function deleteMenstruationLog(id: string): Promise<void> {
+  const { error } = await supabase.from('menstruation_logs').delete().eq('id', id)
   if (error) throw error
 }

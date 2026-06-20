@@ -6,6 +6,7 @@ import { MobileView } from './components/MobileView'
 import { HeatmapView } from './components/HeatmapView'
 import { StatsView } from './components/StatsView'
 import { NotesView } from './components/NotesView'
+import { MenstruationView } from './components/MenstruationView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -99,9 +100,10 @@ function App() {
         onViewModeChange={handleViewModeChange}
         managing={showManagement}
         onManage={handleManage}
+        hideDateNav={dates.viewMode === 'menstruation'}
       />
 
-      <main className="max-w-5xl mx-auto">
+      <main className="max-w-5xl mx-auto pb-24">
         {showManagement ? (
           <ManagementPage
             tasks={tasks.tasks}
@@ -111,6 +113,8 @@ function App() {
             onDelete={(id) => tasks.remove(id)}
             onRefresh={handleRefresh}
           />
+        ) : dates.viewMode === 'menstruation' ? (
+          <MenstruationView />
         ) : (
           <>
             <div className="hidden md:flex justify-end gap-2 p-4">
@@ -182,7 +186,7 @@ function App() {
         )}
       </main>
 
-      {!showManagement && (
+      {!showManagement && dates.viewMode !== 'menstruation' && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -191,21 +195,25 @@ function App() {
         </button>
       )}
 
-      <Toast
-        key={toast.key}
-        message={toast.message}
-        visible={toast.isVisible}
-        onClose={toast.close}
-        onClick={handleToastClick}
-      />
+      {dates.viewMode !== 'menstruation' && (
+        <>
+          <Toast
+            key={toast.key}
+            message={toast.message}
+            visible={toast.isVisible}
+            onClose={toast.close}
+            onClick={handleToastClick}
+          />
 
-      {noteFlow.prompt && (
-        <NoteModal
-          taskId={noteFlow.prompt.taskId}
-          taskName={noteFlow.prompt.taskName}
-          onClose={noteFlow.handleNoteModalClose}
-          onSaved={noteFlow.handleNoteSaved}
-        />
+          {noteFlow.prompt && (
+            <NoteModal
+              taskId={noteFlow.prompt.taskId}
+              taskName={noteFlow.prompt.taskName}
+              onClose={noteFlow.handleNoteModalClose}
+              onSaved={noteFlow.handleNoteSaved}
+            />
+          )}
+        </>
       )}
     </div>
   )

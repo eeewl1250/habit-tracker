@@ -1,0 +1,6 @@
+/*
+  X-Robots-Tag: noindex
+
+/assets/*.js
+  Content-Type: application/javascript
+  X-Content-Type-Options: nosniff
