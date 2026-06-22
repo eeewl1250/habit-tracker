@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef, useLayoutEffect } from 'react'
 import { format, subDays, startOfYear, eachDayOfInterval, getDay, parseISO, startOfMonth, endOfMonth } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useCravingLogs } from '../hooks/useCravingLogs'
@@ -82,6 +82,19 @@ function ContributionGraph({ logs }: { logs: CravingLog[] }) {
   const yearStart = startOfYear(today)
   const days = eachDayOfInterval({ start: yearStart, end: today })
   const logMap = groupLogsByDate(logs)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [maxWeeks, setMaxWeeks] = useState(53)
+
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0].contentRect.width
+      setMaxWeeks(Math.max(1, Math.floor(width / 12)))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const weeks: { date: Date; result?: 'resisted' | 'failed' }[][] = []
   let currentWeek: { date: Date; result?: 'resisted' | 'failed' }[] = []
@@ -101,27 +114,27 @@ function ContributionGraph({ logs }: { logs: CravingLog[] }) {
   }
   if (currentWeek.length > 0) weeks.push(currentWeek)
 
+  const visibleWeeks = weeks.slice(-maxWeeks)
+
   return (
-    <div className="overflow-x-auto">
-      <div className="flex gap-[2px]">
-        {weeks.map((week, wi) => (
-          <div key={wi} className="flex flex-col gap-[2px]">
-            {week.map((day, di) => (
-              <div
-                key={di}
-                className="rounded-sm"
-                style={{
-                  width: '10px',
-                  height: '10px',
-                  backgroundColor: !day.result ? '#1e293b' : day.result === 'resisted' ? '#22c55e' : '#6b7280',
-                  opacity: day.result === 'failed' ? 0.5 : day.result === 'resisted' ? 0.8 : 0.3,
-                }}
-                title={`${format(day.date, 'yyyy-MM-dd')}: ${day.result ?? '記録なし'}`}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+    <div ref={containerRef} className="flex gap-[2px]">
+      {visibleWeeks.map((week, wi) => (
+        <div key={wi} className="flex flex-col gap-[2px]">
+          {week.map((day, di) => (
+            <div
+              key={di}
+              className="rounded-sm"
+              style={{
+                width: '10px',
+                height: '10px',
+                backgroundColor: !day.result ? '#1e293b' : day.result === 'resisted' ? '#22c55e' : '#6b7280',
+                opacity: day.result === 'failed' ? 0.5 : day.result === 'resisted' ? 0.8 : 0.3,
+              }}
+              title={`${format(day.date, 'yyyy-MM-dd')}: ${day.result ?? '記録なし'}`}
+            />
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
 import {
   startOfYear,
   endOfYear,
@@ -6,6 +6,8 @@ import {
   format,
   getWeek,
   getDay,
+  differenceInDays,
+  parseISO,
 } from 'date-fns'
 import type { Task } from '../types'
 import { fetchLogs } from '../lib/api'
@@ -15,6 +17,7 @@ interface HeatmapViewProps {
   categoryColor: Map<string, string>
 }
 
+const CELL_SIZE = 12
 const dayOrder = [1, 2, 3, 4, 5, 6, 0]
 
 function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
@@ -25,6 +28,19 @@ function getTaskColor(task: Task, categoryColor: Map<string, string>): string {
 export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
   const activeTasks = tasks.filter((t) => t.status === 'active')
   const [yearLogs, setYearLogs] = useState<Record<string, Set<string>>>({})
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [maxWeeks, setMaxWeeks] = useState(53)
+
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0].contentRect.width
+      setMaxWeeks(Math.max(1, Math.floor(width / CELL_SIZE)))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const now = new Date()
@@ -63,6 +79,17 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
       )
   }, [yearDays])
 
+  const visibleWeeks = useMemo(() => weeks.slice(-maxWeeks), [weeks, maxWeeks])
+
+  const visibleRange = useMemo(() => {
+    if (visibleWeeks.length === 0) return { start: '', end: '', total: 0 }
+    const first = visibleWeeks[0][0].date
+    const last = visibleWeeks[visibleWeeks.length - 1].at(-1)!.date
+    const start = format(first, 'yyyy-MM-dd')
+    const end = format(last, 'yyyy-MM-dd')
+    return { start, end, total: differenceInDays(last, first) + 1 }
+  }, [visibleWeeks])
+
   const grouped = useMemo(() => {
     const map = new Map<string, Task[]>()
     const uncategorized: Task[] = []
@@ -80,8 +107,13 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
     }
   }, [activeTasks])
 
-  const calcStats = (doneDates: Set<string>) => {
-    return { completed: doneDates.size, total: 365 }
+  const getVisibleCount = (doneDates: Set<string>) => {
+    if (!visibleRange.start) return 0
+    let count = 0
+    for (const d of doneDates) {
+      if (d >= visibleRange.start && d <= visibleRange.end) count++
+    }
+    return count
   }
 
   if (activeTasks.length === 0) {
@@ -95,7 +127,7 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
   const renderTask = (task: Task) => {
     const doneDates = yearLogs[task.id] ?? new Set()
     const color = getTaskColor(task, categoryColor)
-    const stats = calcStats(doneDates)
+    const visibleDone = getVisibleCount(doneDates)
 
     return (
       <div key={task.id}>
@@ -103,14 +135,13 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
           <span className="text-sm font-medium text-gray-700 whitespace-nowrap min-w-[80px] flex items-center gap-1">
             {task.name}
-            
           </span>
           <span className="text-xs text-gray-400">
-            {stats.completed}日/{stats.total}日
+            {visibleDone}日/{visibleRange.total}日
           </span>
         </div>
-        <div className="flex gap-0.5">
-          {weeks.map((week, wi) => (
+        <div ref={containerRef} className="flex gap-0.5">
+          {visibleWeeks.map((week, wi) => (
             <div key={wi} className="flex flex-col gap-0.5">
               {week.map(({ date }) => {
                 const dateStr = format(date, 'yyyy-MM-dd')
@@ -134,7 +165,7 @@ export function HeatmapView({ tasks, categoryColor }: HeatmapViewProps) {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-8 overflow-x-auto">
+    <div className="p-4 md:p-6 space-y-8">
       {grouped.grouped.map(([category, catTasks]) => {
         return (
           <section key={category}>

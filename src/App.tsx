@@ -90,8 +90,10 @@ function App() {
     toast.close()
   }, [toast, noteFlow])
 
+  const isCraving = dates.viewMode === 'craving'
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors ${isCraving ? 'bg-slate-900' : 'bg-gray-50'}`}>
       <Header
         rangeLabel={dates.rangeLabel}
         viewMode={dates.viewMode}
@@ -101,10 +103,11 @@ function App() {
         onViewModeChange={handleViewModeChange}
         managing={showManagement}
         onManage={handleManage}
-        hideDateNav={dates.viewMode === 'menstruation' || dates.viewMode === 'craving'}
+        hideDateNav={dates.viewMode === 'menstruation' || isCraving}
+        dark={isCraving}
       />
 
-      <main className="max-w-5xl mx-auto pb-24">
+      <main className={`transition-colors ${isCraving ? '' : 'max-w-5xl mx-auto pb-24'}`}>
         {showManagement ? (
           <ManagementPage
             tasks={tasks.tasks}
@@ -114,7 +117,7 @@ function App() {
             onDelete={(id) => tasks.remove(id)}
             onRefresh={handleRefresh}
           />
-        ) : dates.viewMode === 'craving' ? (
+        ) : isCraving ? (
           <CravingView />
         ) : dates.viewMode === 'menstruation' ? (
           <MenstruationView />
@@ -189,7 +192,7 @@ function App() {
         )}
       </main>
 
-      {!showManagement && dates.viewMode !== 'menstruation' && dates.viewMode !== 'craving' && (
+      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -198,7 +201,7 @@ function App() {
         </button>
       )}
 
-      {dates.viewMode !== 'menstruation' && dates.viewMode !== 'craving' && (
+      {dates.viewMode !== 'menstruation' && !isCraving && (
         <>
           <Toast
             key={toast.key}
