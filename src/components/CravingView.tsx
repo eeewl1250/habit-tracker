@@ -188,8 +188,8 @@ function MoodPicker({ onSave, onCancel }: { onSave: (moods: string[]) => void; o
 function CountdownOverlay({ onDone }: { onDone: () => void }) {
   const [seconds, setSeconds] = useState(COUNTDOWN_SECONDS)
   const [altIndex, setAltIndex] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setInterval>>()
-  const altTimerRef = useRef<ReturnType<typeof setInterval>>()
+  const timerRef = useRef<ReturnType<typeof setInterval>>(undefined)
+  const altTimerRef = useRef<ReturnType<typeof setInterval>>(undefined)
 
   useEffect(() => {
     timerRef.current = setInterval(() => {

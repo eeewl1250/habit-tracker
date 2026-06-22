@@ -7,7 +7,6 @@ import {
   getWeek,
   getDay,
   differenceInDays,
-  parseISO,
 } from 'date-fns'
 import type { Task } from '../types'
 import { fetchLogs } from '../lib/api'
