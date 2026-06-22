@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog } from '../types'
 import { CATEGORY_COLOR_PAIRS } from '../types'
 
 // ── Tasks ──
@@ -276,4 +276,27 @@ export async function upsertMenstruationLog(yearMonth: string, day: number, leve
 export async function deleteMenstruationLog(id: string): Promise<void> {
   const { error } = await supabase.from('menstruation_logs').delete().eq('id', id)
   if (error) throw error
+}
+
+// ── Craving Logs ──
+
+export async function fetchCravingLogs(dateFrom: string, dateTo: string): Promise<CravingLog[]> {
+  const { data, error } = await supabase
+    .from('craving_logs')
+    .select('*')
+    .gte('created_at', dateFrom)
+    .lte('created_at', dateTo + 'T23:59:59Z')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createCravingLog(result: 'resisted' | 'failed', mood?: string[]): Promise<CravingLog> {
+  const { data, error } = await supabase
+    .from('craving_logs')
+    .insert({ result, mood: mood || null })
+    .select()
+    .single()
+  if (error) throw error
+  return data
 }

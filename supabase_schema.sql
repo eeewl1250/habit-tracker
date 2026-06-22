@@ -91,3 +91,16 @@ CREATE INDEX IF NOT EXISTS idx_menstruation_logs_ym ON menstruation_logs(year_mo
 
 ALTER TABLE menstruation_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all" ON menstruation_logs USING (true) WITH CHECK (true);
+
+-- 食欲コントロール記録
+CREATE TABLE IF NOT EXISTS craving_logs (
+  id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  result     TEXT NOT NULL CHECK (result IN ('resisted', 'failed')),
+  mood       TEXT[] DEFAULT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_craving_logs_created_at ON craving_logs(created_at);
+
+ALTER TABLE craving_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON craving_logs USING (true) WITH CHECK (true);

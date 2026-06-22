@@ -18,6 +18,7 @@ const modes: { key: ViewMode; label: string }[] = [
   { key: 'heatmap', label: '🔥' },
   { key: 'stats', label: '📊' },
   { key: 'notes', label: '📝' },
+  { key: 'craving', label: '🧘' },
   { key: 'menstruation', label: '生理' },
 ]
 
@@ -35,7 +36,7 @@ export function Header({
   return (
     <header className="sticky top-0 z-100 bg-white/95 backdrop-blur border-b border-gray-200">
       <div className="flex items-center justify-between px-4 py-2 md:py-3 max-w-5xl mx-auto">
-        <h1 className="text-base md:text-lg font-bold text-gray-800 whitespace-nowrap">
+        <h1 className="hidden md:block text-base md:text-lg font-bold text-gray-800 whitespace-nowrap">
           習慣トラッカー
         </h1>
 
