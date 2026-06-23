@@ -185,7 +185,14 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
     <div className="min-h-screen bg-slate-900 text-slate-100">
       {/* ── Mobile: 3-stage flow ── */}
       <div className="block md:hidden px-4 pt-8 pb-24">
-        <h2 className="text-center text-lg font-bold mb-8">今日の睡眠</h2>
+        <h2 className="text-center text-lg font-bold mb-1">今日の睡眠</h2>
+        <div className="text-center text-sm text-slate-400 mb-8">
+          {(() => {
+            const d = new Date()
+            if (d.getHours() < 12) d.setDate(d.getDate() - 1)
+            return format(d, 'M月d日（E）', { locale: ja })
+          })()}
+        </div>
 
         <div className="flex flex-col items-center gap-6">
           {step === 0 && (
@@ -316,7 +323,7 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
 
           <button
             onClick={onResetToday}
-            className="w-full max-w-xs text-sm text-blue-300/60 hover:text-blue-300 transition-colors text-center"
+            className="w-full text-sm text-blue-300/60 hover:text-blue-300 transition-colors text-center mt-4"
           >
             今日の睡眠データをリセット
           </button>
