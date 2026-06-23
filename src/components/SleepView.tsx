@@ -12,7 +12,6 @@ interface SleepViewProps {
   onRecordWakeTime: () => void
   onRecordSleep2Time: () => void
   onRecordWake2Time: () => void
-  onResetToday: () => void
   onUpdateTimes: (date: string, updates: {
     bed_time?: string | null
     sleep_time?: string | null
@@ -91,7 +90,7 @@ function calcTotalSleep(log: SleepLog): number | null {
   return Math.round(total / 6) / 10
 }
 
-export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecordSleepTime, onRecordWakeTime, onRecordSleep2Time, onRecordWake2Time, onResetToday, onUpdateTimes }: SleepViewProps) {
+export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecordSleepTime, onRecordWakeTime, onRecordSleep2Time, onRecordWake2Time, onUpdateTimes }: SleepViewProps) {
   const step = !todayLog?.bed_time ? 0 : !todayLog?.sleep_time ? 1 : !todayLog?.wake_time ? 2 : 3
   const today = format(new Date(), 'yyyy-MM-dd')
 
@@ -105,6 +104,8 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
   } | null>(null)
 
   const [skipSecondSleep, setSkipSecondSleep] = useState(false)
+
+  const [resetPicker, setResetPicker] = useState(false)
 
   const draftCache = useRef<Record<string, {
     bedTime: string
@@ -321,12 +322,49 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
             )}
           </div>
 
-          <button
-            onClick={onResetToday}
-            className="w-full text-sm text-blue-300/60 hover:text-blue-300 transition-colors text-center mt-4"
-          >
-            今日の睡眠データをリセット
-          </button>
+          {resetPicker ? (
+            <div className="w-full max-w-xs space-y-2 mt-4">
+              <div className="text-xs text-slate-400 text-center">リセットする日付を選択</div>
+              {[0, 1].map((offset) => {
+                const d = new Date()
+                d.setDate(d.getDate() - offset)
+                const dateStr = format(d, 'yyyy-MM-dd')
+                const label = offset === 0 ? '今日' : '昨日'
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => {
+                      onUpdateTimes(dateStr, {
+                        bed_time: null,
+                        sleep_time: null,
+                        wake_time: null,
+                        sleep2_time: null,
+                        wake2_time: null,
+                      })
+                      setResetPicker(false)
+                      setSkipSecondSleep(false)
+                    }}
+                    className="w-full py-2 text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors"
+                  >
+                    {format(d, 'M/d（E）', { locale: ja })}（{label}）
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => setResetPicker(false)}
+                className="w-full py-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                キャンセル
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setResetPicker(true)}
+              className="w-full text-sm text-blue-300/60 hover:text-blue-300 transition-colors text-center mt-4"
+            >
+              睡眠データをリセット
+            </button>
+          )}
         </div>
 
       {/* ── PC: Grid + modal ── */}
