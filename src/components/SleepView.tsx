@@ -199,13 +199,13 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
           {step === 0 && (
             <button
               onClick={onRecordBedTime}
-              className="w-full max-w-xs py-8 text-2xl font-bold rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all shadow-lg shadow-indigo-600/30"
+              className="w-full py-8 text-2xl font-bold rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all shadow-lg shadow-indigo-600/30"
             >
               🛌 寝た
             </button>
           )}
           {step >= 1 && (
-            <div className="w-full max-w-xs text-center">
+            <div className="w-full text-center">
               <div className="text-sm text-slate-400 mb-1">ベッドに入った</div>
               <div className="text-xl font-mono">{formatTime(todayLog?.bed_time)}</div>
             </div>
@@ -214,13 +214,13 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
           {step === 1 && (
             <button
               onClick={onRecordSleepTime}
-              className="w-full max-w-xs py-8 text-2xl font-bold rounded-2xl bg-purple-600 hover:bg-purple-500 active:scale-95 transition-all shadow-lg shadow-purple-600/30"
+              className="w-full py-8 text-2xl font-bold rounded-2xl bg-purple-600 hover:bg-purple-500 active:scale-95 transition-all shadow-lg shadow-purple-600/30"
             >
               ✨ 寝た
             </button>
           )}
           {step >= 2 && (
-            <div className="w-full max-w-xs text-center">
+            <div className="w-full text-center">
               <div className="text-sm text-slate-400 mb-1">眠りについた</div>
               <div className="text-xl font-mono">{formatTime(todayLog?.sleep_time)}</div>
               {step === 2 && todayLog && calcLatency(todayLog) !== null && (
@@ -234,19 +234,19 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
           {step === 2 && (
             <button
               onClick={onRecordWakeTime}
-              className="w-full max-w-xs py-8 text-2xl font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all shadow-lg shadow-emerald-600/30"
+              className="w-full  py-8 text-2xl font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all shadow-lg shadow-emerald-600/30"
             >
               ☀️ 起きた
             </button>
           )}
           {step === 3 && (
             <>
-              <div className="w-full max-w-xs text-center">
+              <div className="w-full  text-center">
                 <div className="text-sm text-slate-400 mb-1">起きた</div>
                 <div className="text-xl font-mono">{formatTime(todayLog?.wake_time)}</div>
               </div>
               {todayLog && (
-                <div className="w-full max-w-xs bg-slate-800 rounded-xl p-4 space-y-2 text-center">
+                <div className="w-full  bg-slate-800 rounded-xl p-4 space-y-2 text-center">
                   <div className="text-sm text-slate-400">今日のサマリー</div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
@@ -278,7 +278,7 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
                 <>
                   <button
                     onClick={onRecordSleep2Time}
-                    className="w-full max-w-xs py-6 text-lg font-bold rounded-2xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all shadow-lg shadow-cyan-600/30"
+                    className="w-full  py-6 text-lg font-bold rounded-2xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all shadow-lg shadow-cyan-600/30"
                   >
                     💤 二度寝した
                   </button>
@@ -292,20 +292,20 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
               )}
               {todayLog?.sleep2_time && !todayLog?.wake2_time && (
                 <>
-                  <div className="w-full max-w-xs text-center">
+                  <div className="w-full  text-center">
                     <div className="text-sm text-slate-400 mb-1">二度寝</div>
                     <div className="text-xl font-mono">{formatTime(todayLog.sleep2_time)}</div>
                   </div>
                   <button
                     onClick={onRecordWake2Time}
-                    className="w-full max-w-xs py-6 text-lg font-bold rounded-2xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all shadow-lg shadow-cyan-600/30"
+                    className="w-full  py-6 text-lg font-bold rounded-2xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all shadow-lg shadow-cyan-600/30"
                   >
                     ☀️ 二度寝から起きた
                   </button>
                 </>
               )}
               {todayLog?.sleep2_time && todayLog?.wake2_time && (
-                <div className="w-full max-w-xs text-center">
+                <div className="w-full  text-center">
                   <div className="text-sm text-slate-400 mb-1">二度寝</div>
                   <div className="text-sm font-mono text-cyan-300">
                     {formatTime(todayLog.sleep2_time)} → {formatTime(todayLog.wake2_time)}
@@ -323,7 +323,7 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
           </div>
 
           {resetPicker ? (
-            <div className="w-full max-w-xs space-y-2 mt-4">
+            <div className="w-full space-y-2 mt-4">
               <div className="text-xs text-slate-400 text-center">リセットする日付を選択</div>
               {[0, 1].map((offset) => {
                 const d = new Date()
@@ -476,9 +476,9 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
                           <div key={ci} className="flex-1 border-l border-slate-700/30 bg-slate-800/50" />
                         ))}
                         {bedPct >= 0 && sleepPct >= 0 && (
-                          <div className="absolute inset-y-0 group z-[2]" style={{ left: `${bedPct}%`, width: `${sleepPct - bedPct}%` }}>
+                          <div className="absolute inset-y-0 group z-[4]" style={{ left: `${bedPct}%`, width: `${sleepPct - bedPct}%` }}>
                             <div className="absolute inset-y-1/4 inset-x-0 bg-purple-600/40" />
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap z-10">
                               <span className="text-purple-300">入眠潜時</span>
                               <span className="text-slate-400 mx-1">{fmt24(log?.bed_time)}→{fmt24(log?.sleep_time)}</span>
                               <span className="text-slate-500">({fmtDuration(differenceInMinutes(parseISO(log!.sleep_time!), parseISO(log!.bed_time!)))})</span>
@@ -486,18 +486,18 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
                           </div>
                         )}
                         {bedPct >= 0 && sleepPct < 0 && (
-                          <div className="absolute inset-y-0 group z-[2]" style={{ left: `${bedPct}%`, width: `${Math.max(0, 100 - bedPct)}%` }}>
+                          <div className="absolute inset-y-0 group z-[4]" style={{ left: `${bedPct}%`, width: `${Math.max(0, 100 - bedPct)}%` }}>
                             <div className="absolute inset-y-1/4 inset-x-0 bg-purple-600/40" />
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap z-10">
                               <span className="text-purple-300">入眠潜時</span>
                               <span className="text-slate-400 mx-1">{fmt24(log?.bed_time)}→</span>
                             </div>
                           </div>
                         )}
                         {sleepPct >= 0 && wakePct >= 0 && (
-                          <div className="absolute inset-y-0 group z-[2]" style={{ left: `${sleepPct}%`, width: `${wakePct - sleepPct}%` }}>
+                          <div className="absolute inset-y-0 group z-[4]" style={{ left: `${sleepPct}%`, width: `${wakePct - sleepPct}%` }}>
                             <div className="absolute inset-y-1/4 inset-x-0 bg-emerald-500/40" />
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap z-10">
                               <span className="text-emerald-300">睡眠</span>
                               <span className="text-slate-400 mx-1">{fmt24(log?.sleep_time)}→{fmt24(log?.wake_time)}</span>
                               <span className="text-slate-500">({fmtDuration(differenceInMinutes(parseISO(log!.wake_time!), parseISO(log!.sleep_time!)))})</span>
@@ -505,18 +505,18 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
                           </div>
                         )}
                         {sleepPct >= 0 && wakePct < 0 && (
-                          <div className="absolute inset-y-0 group z-[2]" style={{ left: `${sleepPct}%`, width: `${Math.max(0, 100 - sleepPct)}%` }}>
+                          <div className="absolute inset-y-0 group z-[4]" style={{ left: `${sleepPct}%`, width: `${Math.max(0, 100 - sleepPct)}%` }}>
                             <div className="absolute inset-y-1/4 inset-x-0 bg-emerald-500/40" />
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap z-10">
                               <span className="text-emerald-300">睡眠</span>
                               <span className="text-slate-400 mx-1">{fmt24(log?.sleep_time)}→</span>
                             </div>
                           </div>
                         )}
                         {sleep2Pct >= 0 && wake2Pct >= 0 && (
-                          <div className="absolute inset-y-0 group z-[2]" style={{ left: `${sleep2Pct}%`, width: `${wake2Pct - sleep2Pct}%` }}>
+                          <div className="absolute inset-y-0 group z-[4]" style={{ left: `${sleep2Pct}%`, width: `${wake2Pct - sleep2Pct}%` }}>
                             <div className="absolute inset-y-1/4 inset-x-0 bg-cyan-600/40" />
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap z-10">
                               <span className="text-cyan-300">二度寝</span>
                               <span className="text-slate-400 mx-1">{fmt24(log?.sleep2_time)}→{fmt24(log?.wake2_time)}</span>
                               <span className="text-slate-500">({fmtDuration(differenceInMinutes(parseISO(log!.wake2_time!), parseISO(log!.sleep2_time!)))})</span>
@@ -524,9 +524,9 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
                           </div>
                         )}
                         {sleep2Pct >= 0 && wake2Pct < 0 && (
-                          <div className="absolute inset-y-0 group z-[2]" style={{ left: `${sleep2Pct}%`, width: `${Math.max(0, 100 - sleep2Pct)}%` }}>
+                          <div className="absolute inset-y-0 group z-[4]" style={{ left: `${sleep2Pct}%`, width: `${Math.max(0, 100 - sleep2Pct)}%` }}>
                             <div className="absolute inset-y-1/4 inset-x-0 bg-cyan-600/40" />
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-700 text-[10px] rounded px-2 py-1 shadow-lg whitespace-nowrap z-10">
                               <span className="text-cyan-300">二度寝</span>
                               <span className="text-slate-400 mx-1">{fmt24(log?.sleep2_time)}→</span>
                             </div>
