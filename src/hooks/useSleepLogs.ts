@@ -11,12 +11,8 @@ function getSleepDate(): string {
 
 export function useSleepLogs() {
   const [logs, setLogs] = useState<SleepLog[]>([])
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
 
   const load = useCallback(async (from: string, to: string) => {
-    setDateFrom(from)
-    setDateTo(to)
     try {
       const data = await fetchSleepLogs(from, to)
       setLogs(data)
