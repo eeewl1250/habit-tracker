@@ -1,10 +1,12 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
-import { format, subDays, addDays } from 'date-fns'
+import { useState, useCallback, useMemo } from 'react'
+import { format, subDays, getHours } from 'date-fns'
 import type { SleepLog } from '../types'
 import { fetchSleepLogs, upsertSleepLog } from '../lib/api'
 
-function getTodayDate(): string {
-  return format(new Date(), 'yyyy-MM-dd')
+function getSleepDate(): string {
+  const now = new Date()
+  if (getHours(now) < 12) return format(subDays(now, 1), 'yyyy-MM-dd')
+  return format(now, 'yyyy-MM-dd')
 }
 
 export function useSleepLogs() {
@@ -27,10 +29,10 @@ export function useSleepLogs() {
     return logs.find((l) => l.date === date)
   }, [logs])
 
-  const todayLog = useMemo(() => getLog(getTodayDate()), [getLog])
+  const todayLog = useMemo(() => getLog(getSleepDate()), [getLog])
 
   const recordBedTime = useCallback(async () => {
-    const date = getTodayDate()
+    const date = getSleepDate()
     const now = new Date().toISOString()
     const existing = getLog(date)
     if (existing?.bed_time) return existing
@@ -48,7 +50,7 @@ export function useSleepLogs() {
   }, [getLog])
 
   const recordSleepTime = useCallback(async () => {
-    const date = getTodayDate()
+    const date = getSleepDate()
     const now = new Date().toISOString()
     const existing = getLog(date)
     if (existing?.sleep_time) return existing
@@ -68,11 +70,47 @@ export function useSleepLogs() {
   }, [getLog])
 
   const recordWakeTime = useCallback(async () => {
-    const date = getTodayDate()
+    const date = getSleepDate()
     const now = new Date().toISOString()
     const existing = getLog(date)
     if (!existing) return null
     const updated = await upsertSleepLog(date, { wake_time: now })
+    setLogs((prev) => {
+      const idx = prev.findIndex((l) => l.date === date)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = updated
+        return next
+      }
+      return prev
+    })
+    return updated
+  }, [getLog])
+
+  const recordSleep2Time = useCallback(async () => {
+    const date = getSleepDate()
+    const now = new Date().toISOString()
+    const existing = getLog(date)
+    if (!existing) return null
+    const updated = await upsertSleepLog(date, { sleep2_time: now })
+    setLogs((prev) => {
+      const idx = prev.findIndex((l) => l.date === date)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = updated
+        return next
+      }
+      return prev
+    })
+    return updated
+  }, [getLog])
+
+  const recordWake2Time = useCallback(async () => {
+    const date = getSleepDate()
+    const now = new Date().toISOString()
+    const existing = getLog(date)
+    if (!existing) return null
+    const updated = await upsertSleepLog(date, { wake2_time: now })
     setLogs((prev) => {
       const idx = prev.findIndex((l) => l.date === date)
       if (idx >= 0) {
@@ -104,6 +142,26 @@ export function useSleepLogs() {
     })
   }, [])
 
+  const resetToday = useCallback(async () => {
+    const date = getSleepDate()
+    const updated = await upsertSleepLog(date, {
+      bed_time: null,
+      sleep_time: null,
+      wake_time: null,
+      sleep2_time: null,
+      wake2_time: null,
+    })
+    setLogs((prev) => {
+      const idx = prev.findIndex((l) => l.date === date)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = updated
+        return next
+      }
+      return [...prev, updated]
+    })
+  }, [])
+
   return {
     logs,
     load,
@@ -112,6 +170,9 @@ export function useSleepLogs() {
     recordBedTime,
     recordSleepTime,
     recordWakeTime,
+    recordSleep2Time,
+    recordWake2Time,
+    resetToday,
     updateTimes,
   }
 }

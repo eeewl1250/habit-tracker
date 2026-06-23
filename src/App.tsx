@@ -147,6 +147,9 @@ function App() {
             onRecordBedTime={sleepLogs.recordBedTime}
             onRecordSleepTime={sleepLogs.recordSleepTime}
             onRecordWakeTime={sleepLogs.recordWakeTime}
+            onRecordSleep2Time={sleepLogs.recordSleep2Time}
+            onRecordWake2Time={sleepLogs.recordWake2Time}
+            onResetToday={sleepLogs.resetToday}
             onUpdateTimes={sleepLogs.updateTimes}
           />
         ) : (
