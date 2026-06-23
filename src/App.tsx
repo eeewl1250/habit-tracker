@@ -8,6 +8,7 @@ import { StatsView } from './components/StatsView'
 import { NotesView } from './components/NotesView'
 import { MenstruationView } from './components/MenstruationView'
 import { CravingView } from './components/CravingView'
+import { SleepView } from './components/SleepView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -17,6 +18,7 @@ import { useLogs } from './hooks/useLogs'
 import { useViewDates } from './hooks/useViewDates'
 import { useToast } from './hooks/useToast'
 import { useNoteFlow } from './hooks/useNoteFlow'
+import { useSleepLogs } from './hooks/useSleepLogs'
 import { fetchCategories } from './lib/api'
 import type { Category, ViewMode } from './types'
 
@@ -26,6 +28,7 @@ function App() {
   const dates = useViewDates()
   const toast = useToast()
   const noteFlow = useNoteFlow()
+  const sleepLogs = useSleepLogs()
 
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
@@ -57,6 +60,15 @@ function App() {
     )
   }, [dateRangeStr, logs.load])
 
+  const sleepDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
+
+  const loadSleepLogs = useCallback(() => {
+    sleepLogs.load(
+      format(subDays(dates.dateRange.start, 31), 'yyyy-MM-dd'),
+      format(addDays(dates.dateRange.end, 31), 'yyyy-MM-dd')
+    )
+  }, [sleepDateRangeStr, sleepLogs.load])
+
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {})
   }, [])
@@ -64,6 +76,10 @@ function App() {
   useEffect(() => {
     loadLogs()
   }, [loadLogs])
+
+  useEffect(() => {
+    loadSleepLogs()
+  }, [loadSleepLogs])
 
   const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
 
@@ -91,9 +107,11 @@ function App() {
   }, [toast, noteFlow])
 
   const isCraving = dates.viewMode === 'craving'
+  const isSleep = dates.viewMode === 'sleep'
+  const isDark = isCraving || isSleep
 
   return (
-    <div className={`min-h-screen transition-colors ${isCraving ? 'bg-slate-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen transition-colors ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
       <Header
         rangeLabel={dates.rangeLabel}
         viewMode={dates.viewMode}
@@ -104,10 +122,10 @@ function App() {
         managing={showManagement}
         onManage={handleManage}
         hideDateNav={dates.viewMode === 'menstruation' || isCraving}
-        dark={isCraving}
+        dark={isDark}
       />
 
-      <main className={`transition-colors ${isCraving ? '' : 'max-w-5xl mx-auto pb-24'}`}>
+      <main className={`transition-colors ${isDark ? '' : 'max-w-5xl mx-auto pb-24'}`}>
         {showManagement ? (
           <ManagementPage
             tasks={tasks.tasks}
@@ -121,6 +139,16 @@ function App() {
           <CravingView />
         ) : dates.viewMode === 'menstruation' ? (
           <MenstruationView />
+        ) : isSleep ? (
+          <SleepView
+            sleepLogs={sleepLogs.logs}
+            days={dates.days}
+            todayLog={sleepLogs.todayLog}
+            onRecordBedTime={sleepLogs.recordBedTime}
+            onRecordSleepTime={sleepLogs.recordSleepTime}
+            onRecordWakeTime={sleepLogs.recordWakeTime}
+            onUpdateTimes={sleepLogs.updateTimes}
+          />
         ) : (
           <>
             <div className="hidden md:flex justify-end gap-2 p-4">
@@ -192,7 +220,7 @@ function App() {
         )}
       </main>
 
-      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && (
+      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -201,7 +229,7 @@ function App() {
         </button>
       )}
 
-      {dates.viewMode !== 'menstruation' && !isCraving && (
+      {dates.viewMode !== 'menstruation' && !isCraving && !isSleep && (
         <>
           <Toast
             key={toast.key}

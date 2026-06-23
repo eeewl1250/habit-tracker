@@ -1,6 +1,6 @@
 export type PeriodType = 'frequency' | 'weekday'
 export type TaskStatus = 'active' | 'disabled'
-export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving'
+export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep'
 
 export interface Note {
   id: string
@@ -92,6 +92,18 @@ export interface CravingLog {
 }
 
 export const CRAVING_MOODS = ['退屈', 'ストレス', '動画を見た', '友達に誘われた', '寂しい', 'その他'] as const
+
+export interface SleepLog {
+  id: string
+  date: string
+  bed_time: string | null
+  sleep_time: string | null
+  wake_time: string | null
+  sleep2_time: string | null
+  wake2_time: string | null
+  created_at: string
+  updated_at: string
+}
 
 export const CRAVING_ALTERNATIVES = [
   '温かいお茶を飲んでみよう',

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog } from '../types'
 import { CATEGORY_COLOR_PAIRS } from '../types'
 
 // ── Tasks ──
@@ -295,6 +295,38 @@ export async function createCravingLog(result: 'resisted' | 'failed', mood?: str
   const { data, error } = await supabase
     .from('craving_logs')
     .insert({ result, mood: mood || null })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ── Sleep Logs ──
+
+export async function fetchSleepLogs(dateFrom: string, dateTo: string): Promise<SleepLog[]> {
+  const { data, error } = await supabase
+    .from('sleep_logs')
+    .select('*')
+    .gte('date', dateFrom)
+    .lte('date', dateTo)
+    .order('date', { ascending: true })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function upsertSleepLog(
+  date: string,
+  updates: {
+    bed_time?: string | null
+    sleep_time?: string | null
+    wake_time?: string | null
+    sleep2_time?: string | null
+    wake2_time?: string | null
+  }
+): Promise<SleepLog> {
+  const { data, error } = await supabase
+    .from('sleep_logs')
+    .upsert({ date, ...updates }, { onConflict: 'date' })
     .select()
     .single()
   if (error) throw error

@@ -15,6 +15,7 @@ interface HeaderProps {
 }
 
 const modes: { key: ViewMode; label: string }[] = [
+  { key: 'sleep', label: '睡眠' },
   { key: 'week', label: '週' },
   { key: 'month', label: '月' },
   { key: 'heatmap', label: '🔥' },
