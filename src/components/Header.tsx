@@ -154,42 +154,26 @@ export function Header({
         )}
 
         <div ref={containerRef} className="flex items-center gap-1 md:gap-2 min-w-0 flex-shrink">
-          <button
-            ref={curBtnRef}
-            onClick={() => onViewModeChange(viewMode)}
-            className={`flex-shrink-0 px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
-              managing
-                ? dark
-                  ? 'text-slate-300 hover:bg-slate-700'
-                  : 'text-gray-600 hover:bg-gray-100'
-                : 'bg-blue-600 text-white'
-            }`}
-          >
-            {currentLabel}
-          </button>
-          <div ref={navRef} className="flex gap-0.5 md:gap-1 overflow-hidden">
-            {otherModes.map(({ key, label }, i) => (
+          {/* PC nav */}
+          <div className="hidden md:flex items-center gap-0.5 md:gap-1">
+            {modes.map(({ key, label }) => (
               <button
                 key={key}
-                data-key={key}
                 onClick={() => onViewModeChange(key)}
                 className={`flex-shrink-0 px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
-                  i >= maxVisible ? 'hidden' : ''
-                } ${
-                  dark
-                    ? 'text-slate-300 hover:bg-slate-700'
-                    : 'text-gray-600 hover:bg-gray-100'
+                  viewMode === key
+                    ? 'bg-blue-600 text-white'
+                    : dark
+                      ? 'text-slate-300 hover:bg-slate-700'
+                      : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 {label}
               </button>
             ))}
             <button
-              data-key="manage"
               onClick={onManage}
               className={`flex-shrink-0 px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
-                otherModes.length >= maxVisible ? 'hidden' : ''
-              } ${
                 managing
                   ? 'bg-blue-600 text-white'
                   : dark
@@ -200,17 +184,67 @@ export function Header({
               管理
             </button>
           </div>
-          {hasOverflow && (
+
+          {/* SP nav */}
+          <div className="md:hidden flex items-center gap-0.5 md:gap-1">
             <button
-              ref={menuBtnRef}
-              onClick={() => setMenuOpen((p) => !p)}
-              className={`md:hidden flex-shrink-0 px-2 py-1 rounded min-w-[36px] min-h-[36px] flex items-center justify-center text-lg transition-colors ${
-                dark ? 'text-slate-300 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-100'
+              ref={curBtnRef}
+              onClick={() => onViewModeChange(viewMode)}
+              className={`flex-shrink-0 px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
+                managing
+                  ? dark
+                    ? 'text-slate-300 hover:bg-slate-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                  : 'bg-blue-600 text-white'
               }`}
             >
-              {menuOpen ? '✕' : '☰'}
+              {currentLabel}
             </button>
-          )}
+            <div ref={navRef} className="flex gap-0.5 md:gap-1 overflow-hidden">
+              {otherModes.map(({ key, label }, i) => (
+                <button
+                  key={key}
+                  data-key={key}
+                  onClick={() => onViewModeChange(key)}
+                  className={`flex-shrink-0 px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
+                    i >= maxVisible ? 'hidden' : ''
+                  } ${
+                    dark
+                      ? 'text-slate-300 hover:bg-slate-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                data-key="manage"
+                onClick={onManage}
+                className={`flex-shrink-0 px-2 md:px-3 py-1 md:py-1 text-xs md:text-sm rounded transition-colors min-h-[36px] ${
+                  otherModes.length >= maxVisible ? 'hidden' : ''
+                } ${
+                  managing
+                    ? 'bg-blue-600 text-white'
+                    : dark
+                      ? 'text-slate-300 hover:bg-slate-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                管理
+              </button>
+            </div>
+            {hasOverflow && (
+              <button
+                ref={menuBtnRef}
+                onClick={() => setMenuOpen((p) => !p)}
+                className={`flex-shrink-0 px-2 py-1 rounded min-w-[36px] min-h-[36px] flex items-center justify-center text-lg transition-colors md:hidden ${
+                  dark ? 'text-slate-300 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {menuOpen ? '✕' : '☰'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -221,7 +255,7 @@ export function Header({
             dark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'
           }`}>
             <div className="flex flex-wrap gap-2">
-              {modes.filter((m) => m.key !== 'month').map(({ key, label }) => (
+              {navModes.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => handleNavClick(key)}
