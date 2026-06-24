@@ -1,15 +1,11 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
-import { format, parseISO, differenceInMinutes, getHours, getMinutes } from 'date-fns'
+import { format, parseISO, differenceInMinutes, getHours, getMinutes, subDays, addDays } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import type { SleepLog } from '../types'
 
 interface SleepViewProps {
   sleepLogs: SleepLog[]
   days: Date[]
-  todayLog: SleepLog | undefined
-  onRecordBedTime: () => void
-  onRecordSleepTime: () => void
-  onRecordWakeTime: () => void
   onRecordSleep2Time: () => void
   onRecordWake2Time: () => void
   onUpdateTimes: (date: string, updates: {
@@ -90,8 +86,7 @@ function calcTotalSleep(log: SleepLog): number | null {
   return Math.round(total / 6) / 10
 }
 
-export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecordSleepTime, onRecordWakeTime, onRecordSleep2Time, onRecordWake2Time, onUpdateTimes }: SleepViewProps) {
-  const step = !todayLog?.bed_time ? 0 : !todayLog?.sleep_time ? 1 : !todayLog?.wake_time ? 2 : 3
+export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Time, onUpdateTimes }: SleepViewProps) {
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const [editModal, setEditModal] = useState<{
@@ -106,6 +101,14 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
   const [skipSecondSleep, setSkipSecondSleep] = useState(false)
 
   const [resetPicker, setResetPicker] = useState(false)
+
+  const [mobileDate, setMobileDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+
+  const mobileLog = useMemo(() => sleepLogs.find((l) => l.date === mobileDate), [sleepLogs, mobileDate])
+
+  const yesterday = useMemo(() => format(subDays(new Date(), 1), 'yyyy-MM-dd'), [])
+
+  const yesterdayLog = useMemo(() => sleepLogs.find((l) => l.date === yesterday), [sleepLogs, yesterday])
 
   const draftCache = useRef<Record<string, {
     bedTime: string
@@ -139,8 +142,7 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
       return
     }
     const log = sleepLogs.find((l) => l.date === dateStr)
-    const todayStr = format(new Date(), 'yyyy-MM-dd')
-    const withDefault = (iso: string | null | undefined) => toDatetimeLocalValue(iso) || `${todayStr}T`
+    const withDefault = (iso: string | null | undefined) => toDatetimeLocalValue(iso) || `${dateStr}T`
     setEditModal({
       dateStr,
       bedTime: withDefault(log?.bed_time),
@@ -184,187 +186,256 @@ export function SleepView({ sleepLogs, days, todayLog, onRecordBedTime, onRecord
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
-      {/* ── Mobile: 3-stage flow ── */}
+      {/* ── Mobile ── */}
       <div className="block md:hidden px-4 pt-8 pb-24">
-        <h2 className="text-center text-lg font-bold mb-1">今日の睡眠</h2>
-        <div className="text-center text-sm text-slate-400 mb-8">
-          {(() => {
-            const d = new Date()
-            if (d.getHours() < 12) d.setDate(d.getDate() - 1)
-            return format(d, 'M月d日（E）', { locale: ja })
-          })()}
+        <h2 className="text-center text-lg font-bold mb-1">{mobileDate === today ? '今日の睡眠' : '睡眠記録'}</h2>
+        {/* 日付ナビゲーション */}
+        <div className="flex items-center justify-center gap-4 mb-2">
+          <button
+            onClick={() => setMobileDate((p) => format(subDays(parseISO(p), 1), 'yyyy-MM-dd'))}
+            className="text-slate-400 hover:text-white text-lg px-2"
+          >
+            ‹
+          </button>
+          <span className="text-sm text-slate-400 font-mono">
+            {format(parseISO(mobileDate), 'M月d日（E）', { locale: ja })}
+          </span>
+          <button
+            onClick={() => setMobileDate((p) => format(addDays(parseISO(p), 1), 'yyyy-MM-dd'))}
+            disabled={mobileDate === today}
+            className="text-slate-400 hover:text-white text-lg px-2 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            ›
+          </button>
         </div>
 
-        <div className="flex flex-col items-center gap-6">
-          {step === 0 && (
+        {/* 昨日未記録リマインダー */}
+        {yesterdayLog && !yesterdayLog.bed_time && !yesterdayLog.sleep_time && !yesterdayLog.wake_time && yesterday !== mobileDate && (
+          <div className="bg-amber-900/40 border border-amber-700/50 rounded-xl p-3 text-center mb-4">
+            <div className="text-sm text-amber-300">昨日の睡眠が未記録です</div>
             <button
-              onClick={onRecordBedTime}
-              className="w-full py-8 text-2xl font-bold rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all shadow-lg shadow-indigo-600/30"
+              onClick={() => setMobileDate(yesterday)}
+              className="mt-1 text-xs text-amber-400 underline hover:text-amber-300"
             >
-              🛌 寝た
+              昨日を記録する
             </button>
-          )}
-          {step >= 1 && (
+          </div>
+        )}
+
+        <div className="flex flex-col items-center gap-4">
+          {/* 上床 */}
+          {mobileLog?.bed_time ? (
             <div className="w-full text-center">
               <div className="text-sm text-slate-400 mb-1">ベッドに入った</div>
-              <div className="text-xl font-mono">{formatTime(todayLog?.bed_time)}</div>
+              <div className="text-xl font-mono">{formatTime(mobileLog.bed_time)}</div>
             </div>
-          )}
-
-          {step === 1 && (
-            <button
-              onClick={onRecordSleepTime}
-              className="w-full py-8 text-2xl font-bold rounded-2xl bg-purple-600 hover:bg-purple-500 active:scale-95 transition-all shadow-lg shadow-purple-600/30"
-            >
-              ✨ 寝た
-            </button>
-          )}
-          {step >= 2 && (
-            <div className="w-full text-center">
-              <div className="text-sm text-slate-400 mb-1">眠りについた</div>
-              <div className="text-xl font-mono">{formatTime(todayLog?.sleep_time)}</div>
-              {step === 2 && todayLog && calcLatency(todayLog) !== null && (
-                <div className="text-sm text-yellow-400 mt-1">
-                  入眠まで {calcLatency(todayLog)} 分
-                </div>
-              )}
-              </div>
-          )}
-
-          {step === 2 && (
-            <button
-              onClick={onRecordWakeTime}
-              className="w-full  py-8 text-2xl font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all shadow-lg shadow-emerald-600/30"
-            >
-              ☀️ 起きた
-            </button>
-          )}
-          {step === 3 && (
-            <>
-              <div className="w-full  text-center">
-                <div className="text-sm text-slate-400 mb-1">起きた</div>
-                <div className="text-xl font-mono">{formatTime(todayLog?.wake_time)}</div>
-              </div>
-              {todayLog && (
-                <div className="w-full  bg-slate-800 rounded-xl p-4 space-y-2 text-center">
-                  <div className="text-sm text-slate-400">今日のサマリー</div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <div className="text-lg font-bold text-indigo-300">{calcLatency(todayLog) ?? '-'}</div>
-                      <div className="text-xs text-slate-400">入眠(分)</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-emerald-300">{calcTotalSleep(todayLog) ?? '-'}</div>
-                      <div className="text-xs text-slate-400">睡眠(h)</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-amber-300">{calcEfficiency(todayLog) != null ? `${calcEfficiency(todayLog)}%` : '-'}</div>
-                      <div className="text-xs text-slate-400">効率</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <div className="text-sm text-slate-500 text-center">
-                おやすみなさい 🌙
-              </div>
-
-              {/* 二度寝（回笼觉） */}
-              {!skipSecondSleep && !todayLog?.sleep2_time && (
-                <>
-                  <button
-                    onClick={onRecordSleep2Time}
-                    className="w-full  py-6 text-lg font-bold rounded-2xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all shadow-lg shadow-cyan-600/30"
-                  >
-                    💤 二度寝した
-                  </button>
-                  <button
-                    onClick={() => setSkipSecondSleep(true)}
-                    className="text-sm text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    スキップ
-                  </button>
-                </>
-              )}
-              {todayLog?.sleep2_time && !todayLog?.wake2_time && (
-                <>
-                  <div className="w-full  text-center">
-                    <div className="text-sm text-slate-400 mb-1">二度寝</div>
-                    <div className="text-xl font-mono">{formatTime(todayLog.sleep2_time)}</div>
-                  </div>
-                  <button
-                    onClick={onRecordWake2Time}
-                    className="w-full  py-6 text-lg font-bold rounded-2xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all shadow-lg shadow-cyan-600/30"
-                  >
-                    ☀️ 二度寝から起きた
-                  </button>
-                </>
-              )}
-              {todayLog?.sleep2_time && todayLog?.wake2_time && (
-                <div className="w-full  text-center">
-                  <div className="text-sm text-slate-400 mb-1">二度寝</div>
-                  <div className="text-sm font-mono text-cyan-300">
-                    {formatTime(todayLog.sleep2_time)} → {formatTime(todayLog.wake2_time)}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {(() => {
-                      const d = differenceInMinutes(parseISO(todayLog.wake2_time), parseISO(todayLog.sleep2_time));
-                      return `${Math.round(d)}分`;
-                    })()}
-                  </div>
-                </div>
-              )}
-            </>
-            )}
-          </div>
-
-          {resetPicker ? (
-            <div className="w-full space-y-2 mt-4">
-              <div className="text-xs text-slate-400 text-center">リセットする日付を選択</div>
-              {[0, 1].map((offset) => {
-                const d = new Date()
-                d.setDate(d.getDate() - offset)
-                const dateStr = format(d, 'yyyy-MM-dd')
-                const label = offset === 0 ? '今日' : '昨日'
-                return (
-                  <button
-                    key={dateStr}
-                    onClick={() => {
-                      onUpdateTimes(dateStr, {
-                        bed_time: null,
-                        sleep_time: null,
-                        wake_time: null,
-                        sleep2_time: null,
-                        wake2_time: null,
-                      })
-                      setResetPicker(false)
-                      setSkipSecondSleep(false)
-                    }}
-                    className="w-full py-2 text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors"
-                  >
-                    {format(d, 'M/d（E）', { locale: ja })}（{label}）
-                  </button>
-                )
-              })}
+          ) : mobileDate === today ? (
+            <div className="w-full flex gap-2">
               <button
-                onClick={() => setResetPicker(false)}
-                className="w-full py-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                onClick={() => onUpdateTimes(mobileDate, { bed_time: new Date().toISOString() })}
+                className="flex-1 py-6 text-xl font-bold rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all shadow-lg shadow-indigo-600/30"
               >
-                キャンセル
+                🛌 寝た
+              </button>
+              <button
+                onClick={() => handleDateClick(mobileDate)}
+                className="w-14 py-6 text-lg rounded-2xl bg-indigo-600/60 hover:bg-indigo-500/80 active:scale-95 transition-all"
+                title="時間を指定"
+              >
+                ✎
               </button>
             </div>
           ) : (
             <button
+              onClick={() => handleDateClick(mobileDate)}
+              className="w-full py-6 text-xl font-bold rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all shadow-lg shadow-indigo-600/30"
+            >
+              🛌 寝た
+            </button>
+          )}
+
+          {/* 入眠 */}
+          {mobileLog?.sleep_time ? (
+            <div className="w-full text-center">
+              <div className="text-sm text-slate-400 mb-1">眠りについた</div>
+              <div className="text-xl font-mono">{formatTime(mobileLog.sleep_time)}</div>
+              {mobileLog?.bed_time && calcLatency(mobileLog) !== null && (
+                <div className="text-sm text-yellow-400 mt-1">
+                  入眠まで {calcLatency(mobileLog)} 分
+                </div>
+              )}
+            </div>
+          ) : mobileDate === today ? (
+            <div className="w-full flex gap-2">
+              <button
+                onClick={() => onUpdateTimes(mobileDate, { sleep_time: new Date().toISOString() })}
+                className="flex-1 py-6 text-xl font-bold rounded-2xl bg-purple-600 hover:bg-purple-500 active:scale-95 transition-all shadow-lg shadow-purple-600/30"
+              >
+                ✨ 寝た
+              </button>
+              <button
+                onClick={() => handleDateClick(mobileDate)}
+                className="w-14 py-6 text-lg rounded-2xl bg-purple-600/60 hover:bg-purple-500/80 active:scale-95 transition-all"
+                title="時間を指定"
+              >
+                ✎
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleDateClick(mobileDate)}
+              className="w-full py-6 text-xl font-bold rounded-2xl bg-purple-600 hover:bg-purple-500 active:scale-95 transition-all shadow-lg shadow-purple-600/30"
+            >
+              ✨ 寝た
+            </button>
+          )}
+
+          {/* 起床 */}
+          {mobileLog?.wake_time ? (
+            <div className="w-full text-center">
+              <div className="text-sm text-slate-400 mb-1">起きた</div>
+              <div className="text-xl font-mono">{formatTime(mobileLog.wake_time)}</div>
+            </div>
+          ) : mobileDate === today ? (
+            <div className="w-full flex gap-2">
+              <button
+                onClick={() => onUpdateTimes(mobileDate, { wake_time: new Date().toISOString() })}
+                className="flex-1 py-6 text-xl font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all shadow-lg shadow-emerald-600/30"
+              >
+                ☀️ 起きた
+              </button>
+              <button
+                onClick={() => handleDateClick(mobileDate)}
+                className="w-14 py-6 text-lg rounded-2xl bg-emerald-600/60 hover:bg-emerald-500/80 active:scale-95 transition-all"
+                title="時間を指定"
+              >
+                ✎
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleDateClick(mobileDate)}
+              className="w-full py-6 text-xl font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all shadow-lg shadow-emerald-600/30"
+            >
+              ☀️ 起きた
+            </button>
+          )}
+
+          {/* サマリー */}
+          {mobileLog?.bed_time && mobileLog?.sleep_time && mobileLog?.wake_time && (
+            <div className="w-full bg-slate-800 rounded-xl p-4 space-y-2 text-center">
+              <div className="text-sm text-slate-400">サマリー</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <div className="text-lg font-bold text-indigo-300">{calcLatency(mobileLog) ?? '-'}</div>
+                  <div className="text-xs text-slate-400">入眠(分)</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-emerald-300">{calcTotalSleep(mobileLog) ?? '-'}</div>
+                  <div className="text-xs text-slate-400">睡眠(h)</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-amber-300">{calcEfficiency(mobileLog) != null ? `${calcEfficiency(mobileLog)}%` : '-'}</div>
+                  <div className="text-xs text-slate-400">効率</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 二度寝 */}
+          {mobileLog?.bed_time && mobileLog?.sleep_time && mobileLog?.wake_time && !skipSecondSleep && !mobileLog?.sleep2_time && (
+            <button
+              onClick={onRecordSleep2Time}
+              className="w-full py-5 text-lg font-bold rounded-2xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all shadow-lg shadow-cyan-600/30"
+            >
+              💤 二度寝した
+            </button>
+          )}
+          {mobileLog?.sleep2_time && !mobileLog?.wake2_time && (
+            <div className="w-full text-center">
+              <div className="text-sm text-slate-400 mb-1">二度寝</div>
+              <div className="text-xl font-mono">{formatTime(mobileLog.sleep2_time)}</div>
+              <button
+                onClick={onRecordWake2Time}
+                className="w-full mt-3 py-5 text-lg font-bold rounded-2xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all shadow-lg shadow-cyan-600/30"
+              >
+                ☀️ 二度寝から起きた
+              </button>
+            </div>
+          )}
+          {mobileLog?.sleep2_time && mobileLog?.wake2_time && (
+            <div className="w-full text-center">
+              <div className="text-sm text-slate-400 mb-1">二度寝</div>
+              <div className="text-sm font-mono text-cyan-300">
+                {formatTime(mobileLog.sleep2_time)} → {formatTime(mobileLog.wake2_time)}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                {(() => {
+                  const d = differenceInMinutes(parseISO(mobileLog.wake2_time), parseISO(mobileLog.sleep2_time));
+                  return `${Math.round(d)}分`;
+                })()}
+              </div>
+            </div>
+          )}
+          {mobileLog?.bed_time && mobileLog?.sleep_time && mobileLog?.wake_time && !mobileLog?.sleep2_time && (
+            <button
+              onClick={() => setSkipSecondSleep(true)}
+              className="text-sm text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              二度寝しない
+            </button>
+          )}
+
+          {/* 編集 */}
+          {(mobileLog?.bed_time || mobileLog?.sleep_time || mobileLog?.wake_time) && (
+            <button
+              onClick={() => handleDateClick(mobileDate)}
+              className="w-full py-4 text-base font-bold rounded-2xl bg-slate-700 hover:bg-slate-600 active:scale-95 transition-all shadow-lg"
+            >
+              時間を編集する
+            </button>
+          )}
+
+          {/* リセット */}
+          {resetPicker ? (
+            <div className="w-full space-y-2 mt-2">
+              <div className="text-xs text-slate-400 text-center">
+                {format(parseISO(mobileDate), 'M/d（E）', { locale: ja })} のデータをリセット？
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setResetPicker(false)}
+                  className="flex-1 py-2 text-sm bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => {
+                    onUpdateTimes(mobileDate, {
+                      bed_time: null,
+                      sleep_time: null,
+                      wake_time: null,
+                      sleep2_time: null,
+                      wake2_time: null,
+                    })
+                    setResetPicker(false)
+                    setSkipSecondSleep(false)
+                  }}
+                  className="flex-1 py-2 text-sm bg-red-700 hover:bg-red-600 text-white rounded-lg transition-colors"
+                >
+                  リセット
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
               onClick={() => setResetPicker(true)}
-              className="w-full text-sm text-blue-300/60 hover:text-blue-300 transition-colors text-center mt-4"
+              className="w-full text-sm text-blue-300/60 hover:text-blue-300 transition-colors text-center mt-2"
             >
               睡眠データをリセット
             </button>
           )}
+        </div>
         </div>
 
       {/* ── PC: Grid + modal ── */}
