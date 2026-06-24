@@ -301,6 +301,17 @@ export async function createCravingLog(result: 'resisted' | 'failed', mood?: str
   return data
 }
 
+export async function updateCravingLog(id: string, mood?: string[]): Promise<CravingLog> {
+  const { data, error } = await supabase
+    .from('craving_logs')
+    .update({ mood: mood || null })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
 // ── Sleep Logs ──
 
 export async function fetchSleepLogs(dateFrom: string, dateTo: string): Promise<SleepLog[]> {

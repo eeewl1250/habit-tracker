@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { fetchCravingLogs, createCravingLog } from '../lib/api'
+import { fetchCravingLogs, createCravingLog, updateCravingLog } from '../lib/api'
 import type { CravingLog } from '../types'
 
 export function useCravingLogs() {
@@ -24,5 +24,11 @@ export function useCravingLogs() {
     return log
   }, [])
 
-  return { logs, loading, load, add }
+  const update = useCallback(async (id: string, mood?: string[]) => {
+    const log = await updateCravingLog(id, mood)
+    setLogs((prev) => prev.map((l) => (l.id === id ? log : l)))
+    return log
+  }, [])
+
+  return { logs, loading, load, add, update }
 }

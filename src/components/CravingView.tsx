@@ -139,8 +139,26 @@ function ContributionGraph({ logs }: { logs: CravingLog[] }) {
   )
 }
 
-function MoodPicker({ onSave, onCancel }: { onSave: (moods: string[]) => void; onCancel: () => void }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+function formatMoodDisplay(moods: string[]): string {
+  return moods.join('、')
+}
+
+function parseInitialMoods(initialMoods?: string[]): { moods: string[]; customReason: string } {
+  if (!initialMoods) return { moods: [], customReason: '' }
+  const otherIdx = initialMoods.indexOf('その他')
+  if (otherIdx !== -1 && otherIdx < initialMoods.length - 1) {
+    return {
+      moods: initialMoods.slice(0, otherIdx + 1),
+      customReason: initialMoods.slice(otherIdx + 1).join('、'),
+    }
+  }
+  return { moods: [...initialMoods], customReason: '' }
+}
+
+function MoodPicker({ onSave, onCancel, initialMoods }: { onSave: (moods: string[]) => void; onCancel: () => void; initialMoods?: string[] }) {
+  const parsed = parseInitialMoods(initialMoods)
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(parsed.moods))
+  const [customReason, setCustomReason] = useState(parsed.customReason)
   const toggle = (mood: string) => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -148,6 +166,13 @@ function MoodPicker({ onSave, onCancel }: { onSave: (moods: string[]) => void; o
       else next.add(mood)
       return next
     })
+  }
+  const handleSave = () => {
+    const moods = [...selected]
+    if (selected.has('その他') && customReason.trim()) {
+      moods.push(customReason.trim())
+    }
+    onSave(moods)
   }
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -169,12 +194,25 @@ function MoodPicker({ onSave, onCancel }: { onSave: (moods: string[]) => void; o
             </button>
           ))}
         </div>
+        {selected.has('その他') && (
+          <div className="mb-6">
+            <label className="text-slate-400 text-sm block mb-2">具体的な理由（自由記述）</label>
+            <input
+              type="text"
+              value={customReason}
+              onChange={(e) => setCustomReason(e.target.value)}
+              placeholder="例：SNSを見てしまった、etc."
+              className="w-full px-3 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 focus:border-blue-500 focus:outline-none text-sm"
+              autoFocus
+            />
+          </div>
+        )}
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-2 rounded-lg text-slate-300 bg-slate-700 hover:bg-slate-600 transition-colors">
             キャンセル
           </button>
           <button
-            onClick={() => onSave([...selected])}
+            onClick={handleSave}
             className="flex-1 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors"
           >
             記録する
@@ -237,11 +275,12 @@ function CountdownOverlay({ onDone }: { onDone: () => void }) {
 }
 
 export function CravingView() {
-  const { logs, load, add } = useCravingLogs()
+  const { logs, load, add, update } = useCravingLogs()
   const [showMoodPicker, setShowMoodPicker] = useState(false)
   const [showCountdown, setShowCountdown] = useState(false)
   const [showCelebration, setShowCelebration] = useState(false)
   const [recordedToday, setRecordedToday] = useState<'resisted' | 'failed' | null>(null)
+  const [editingLog, setEditingLog] = useState<CravingLog | null>(null)
 
   const todayRef = useRef(new Date())
   const today = todayRef.current
@@ -280,6 +319,12 @@ export function CravingView() {
     setRecordedToday('failed')
   }, [add])
 
+  const handleEditMoodSave = useCallback(async (moods: string[]) => {
+    if (!editingLog) return
+    setEditingLog(null)
+    await update(editingLog.id, moods)
+  }, [editingLog, update])
+
   const todayLabel = format(today, 'M月d日 (E)', { locale: ja })
 
   const ringCircumference = 2 * Math.PI * 54
@@ -289,6 +334,13 @@ export function CravingView() {
     <div className="min-h-screen bg-slate-900 text-white">
       {showCelebration && <Confetti />}
       {showMoodPicker && <MoodPicker onSave={handleMoodSave} onCancel={() => setShowMoodPicker(false)} />}
+      {editingLog && (
+        <MoodPicker
+          initialMoods={editingLog.mood ?? undefined}
+          onSave={handleEditMoodSave}
+          onCancel={() => setEditingLog(null)}
+        />
+      )}
       {showCountdown && <CountdownOverlay onDone={() => setShowCountdown(false)} />}
 
       <div className="max-w-lg mx-auto px-4 py-6 pb-32">
@@ -396,11 +448,15 @@ export function CravingView() {
             <h3 className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-3">直近の記録</h3>
             <div className="space-y-2">
               {logs.slice(0, 10).map((l) => (
-                <div key={l.id} className="flex items-center justify-between text-sm">
+                <div
+                  key={l.id}
+                  onClick={() => setEditingLog(l)}
+                  className="flex items-center justify-between text-sm cursor-pointer hover:bg-slate-700/30 rounded-lg px-2 -mx-2 py-1 transition-colors"
+                >
                   <span className="text-slate-400">{format(parseISO(l.created_at), 'M/d (E)', { locale: ja })}</span>
                   <div className="flex items-center gap-2">
                     {l.mood && l.mood.length > 0 && (
-                      <span className="text-xs text-slate-500">{l.mood.join('、')}</span>
+                      <span className="text-xs text-slate-500">{formatMoodDisplay(l.mood)}</span>
                     )}
                     <span className={l.result === 'resisted' ? 'text-green-400' : 'text-slate-400'}>
                       {l.result === 'resisted' ? '💪 耐えた' : '😞 失敗'}
