@@ -3,12 +3,13 @@ import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eac
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import type { TimeLog, TimeCategory } from '../types'
-import { TIME_CATEGORIES } from '../types'
+import { TIME_CATEGORIES, TIME_BONUS_RATE } from '../types'
 import type { useTimeLogs } from '../hooks/useTimeLogs'
 
 interface FocusViewProps {
   timeLogs: ReturnType<typeof useTimeLogs>
   baseDate: Date
+  onGoToFinance?: () => void
 }
 
 const COLORS: Record<TimeCategory, string> = { job_hunting: '#3B82F6', self_growth: '#10B981' }
@@ -465,7 +466,7 @@ function Analytics({ logs, baseDate }: { logs: TimeLog[]; baseDate: Date }) {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
           <div className="text-lg font-bold text-gray-800">{dailyAvg.toFixed(1)}</div>
-          <div className="text-[10px] text-gray-500">日均(h)</div>
+           <div className="text-[10px] text-gray-500">日平均(h)</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
           <div className="text-lg font-bold text-gray-800">{ratioJob}%</div>
@@ -518,10 +519,21 @@ function Analytics({ logs, baseDate }: { logs: TimeLog[]; baseDate: Date }) {
   )
 }
 
-export function FocusView({ timeLogs, baseDate }: FocusViewProps) {
+export function FocusView({ timeLogs, baseDate, onGoToFinance }: FocusViewProps) {
   const [showSummary, setShowSummary] = useState<TimeLog | null>(null)
 
   const activeLog = timeLogs.getActiveTimer()
+
+  const todayBonus = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    let minutes = 0
+    for (const l of timeLogs.logs) {
+      if (l.category === 'job_hunting' && l.duration && l.start_time.startsWith(today)) {
+        minutes += l.duration
+      }
+    }
+    return Math.floor((minutes / 60) * TIME_BONUS_RATE)
+  }, [timeLogs.logs])
 
   const handleStart = useCallback(async (cat: TimeCategory) => {
     await timeLogs.startTimer(cat)
@@ -542,7 +554,14 @@ export function FocusView({ timeLogs, baseDate }: FocusViewProps) {
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">⏰ 集中タイムトラッキング</h2>
+      <h2 className="text-lg font-bold text-gray-800 mb-2">⏰ 集中タイムトラッキング</h2>
+      <div className="flex items-center gap-3 mb-4 text-xs">
+        <span className="text-gray-500">🎮 今日の集中ボーナス: <strong className="text-green-600">+¥{todayBonus.toLocaleString()}</strong></span>
+        {onGoToFinance && (
+          <button onClick={onGoToFinance}
+            className="text-blue-600 hover:text-blue-800 font-medium underline">💰 家計簿を見る</button>
+        )}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-3">
           <FocusTimer activeLog={activeLog} onStart={handleStart} onStop={handleStop} />

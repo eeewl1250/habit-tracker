@@ -10,6 +10,7 @@ import { MenstruationView } from './components/MenstruationView'
 import { CravingView } from './components/CravingView'
 import { SleepView } from './components/SleepView'
 import { FocusView } from './components/FocusView'
+import { FinanceView } from './components/FinanceView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -21,6 +22,9 @@ import { useToast } from './hooks/useToast'
 import { useNoteFlow } from './hooks/useNoteFlow'
 import { useSleepLogs } from './hooks/useSleepLogs'
 import { useTimeLogs } from './hooks/useTimeLogs'
+import { useFinance } from './hooks/useFinance'
+import { useBudget } from './hooks/useBudget'
+import { useRecurring } from './hooks/useRecurring'
 import { fetchCategories } from './lib/api'
 import type { Category, ViewMode } from './types'
 
@@ -32,6 +36,9 @@ function App() {
   const noteFlow = useNoteFlow()
   const sleepLogs = useSleepLogs()
   const timeLogs = useTimeLogs()
+  const finance = useFinance()
+  const budget = useBudget()
+  const recurring = useRecurring()
 
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
@@ -84,6 +91,11 @@ function App() {
     loadSleepLogs()
   }, [loadSleepLogs])
 
+  const isCraving = dates.viewMode === 'craving'
+  const isSleep = dates.viewMode === 'sleep'
+  const isFocus = dates.viewMode === 'focus'
+  const isFinance = dates.viewMode === 'finance'
+
   const focusDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
   useEffect(() => {
     timeLogs.load(
@@ -91,6 +103,30 @@ function App() {
       format(addDays(dates.dateRange.end, 31), 'yyyy-MM-dd')
     )
   }, [focusDateRangeStr, timeLogs.load])
+
+  const financeMonthStr = format(new Date(), 'yyyy-MM')
+  useEffect(() => {
+    finance.load(
+      format(subDays(new Date(), 60), 'yyyy-MM-dd'),
+      format(addDays(new Date(), 1), 'yyyy-MM-dd')
+    )
+  }, [finance.load, financeMonthStr])
+
+  useEffect(() => {
+    if (isFinance) budget.load(financeMonthStr)
+  }, [isFinance, budget.load, financeMonthStr])
+
+  // Load recurring templates on mount
+  useEffect(() => {
+    recurring.loadTemplates()
+  }, [recurring.loadTemplates])
+
+  // Ensure monthly recurring records exist for the current month
+  useEffect(() => {
+    if (isFinance && recurring.templates.length > 0) {
+      recurring.ensureMonthlyRecords(financeMonthStr)
+    }
+  }, [isFinance, financeMonthStr, recurring.templates.length, recurring.ensureMonthlyRecords])
 
   const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
 
@@ -117,9 +153,6 @@ function App() {
     toast.close()
   }, [toast, noteFlow])
 
-  const isCraving = dates.viewMode === 'craving'
-  const isSleep = dates.viewMode === 'sleep'
-  const isFocus = dates.viewMode === 'focus'
   const isDark = isCraving || isSleep
 
   return (
@@ -133,7 +166,7 @@ function App() {
         onViewModeChange={handleViewModeChange}
         managing={showManagement}
         onManage={handleManage}
-        hideDateNav={dates.viewMode === 'menstruation' || isCraving || isFocus}
+        hideDateNav={dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance}
         dark={isDark}
       />
 
@@ -152,7 +185,25 @@ function App() {
         ) : dates.viewMode === 'menstruation' ? (
           <MenstruationView />
         ) : isFocus ? (
-          <FocusView timeLogs={timeLogs} baseDate={dates.baseDate} />
+          <FocusView timeLogs={timeLogs} baseDate={dates.baseDate} onGoToFinance={() => dates.setViewMode('finance')} />
+        ) : isFinance ? (
+          <FinanceView
+            records={finance.records}
+            timeLogs={timeLogs.logs}
+            budget={budget.getSettings(financeMonthStr)}
+            recurringTemplates={recurring.templates}
+            recurringRecords={recurring.monthlyRecords}
+            recurringIncome={recurring.totalIncome}
+            recurringExpense={recurring.totalExpense}
+            recurringNet={recurring.netRecurring}
+            onAdd={finance.add}
+            onDelete={finance.remove}
+            onUpdateBase={(field, value) => budget.updateBase(financeMonthStr, field, value)}
+            onAddRecurringTemplate={recurring.addTemplate}
+            onEditRecurringTemplate={recurring.editTemplate}
+            onDeleteRecurringTemplate={recurring.removeTemplate}
+            onUpdateRecurringRecord={recurring.updateMonthlyRecord}
+          />
         ) : isSleep ? (
           <SleepView
             sleepLogs={sleepLogs.logs}
@@ -232,7 +283,7 @@ function App() {
         )}
       </main>
 
-      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && (
+      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -241,7 +292,7 @@ function App() {
         </button>
       )}
 
-      {dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && (
+      {dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && (
         <>
           <Toast
             key={toast.key}

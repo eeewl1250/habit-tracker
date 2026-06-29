@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData } from '../types'
-import { CATEGORY_COLOR_PAIRS } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord } from '../types'
+import { CATEGORY_COLOR_PAIRS, resolveTargetPool } from '../types'
 
 // ── Tasks ──
 
@@ -427,4 +427,138 @@ export async function finishTimeLog(id: string, endTime: string, summary?: strin
 export async function deleteTimeLog(id: string): Promise<void> {
   const { error } = await supabase.from('time_logs').delete().eq('id', id)
   if (error) throw error
+}
+
+// ── Finance ──
+
+export async function fetchFinanceRecords(dateFrom: string, dateTo: string): Promise<FinanceRecord[]> {
+  const { data, error } = await supabase
+    .from('financial_logs')
+    .select('*')
+    .gte('created_at', dateFrom)
+    .lte('created_at', dateTo + 'T23:59:59Z')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createFinanceRecord(form: FinanceFormData): Promise<FinanceRecord> {
+  const { data, error } = await supabase
+    .from('financial_logs')
+    .insert({
+      amount: form.amount,
+      item_name: form.item_name,
+      base_category: form.base_category,
+      motivation: form.motivation,
+      target_pool: resolveTargetPool(form.base_category, form.motivation),
+      tags: form.tags || null,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteFinanceRecord(id: string): Promise<void> {
+  const { error } = await supabase.from('financial_logs').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── Budget Settings ──
+
+export async function fetchBudgetSettings(month: string): Promise<BudgetSettings | null> {
+  const { data, error } = await supabase
+    .from('budget_settings')
+    .select('*')
+    .eq('month', month)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function upsertBudgetSettings(settings: Partial<BudgetSettings> & { month: string }): Promise<BudgetSettings> {
+  const { data, error } = await supabase
+    .from('budget_settings')
+    .upsert(settings, { onConflict: 'month' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function fetchBudgetSettingsBatch(months: string[]): Promise<BudgetSettings[]> {
+  if (months.length === 0) return []
+  const { data, error } = await supabase
+    .from('budget_settings')
+    .select('*')
+    .in('month', months)
+  if (error) throw error
+  return data ?? []
+}
+
+// ── Recurring Items ──
+
+export async function fetchRecurringTemplates(): Promise<RecurringTemplate[]> {
+  const { data, error } = await supabase
+    .from('recurring_templates')
+    .select('*')
+    .order('sort_order', { ascending: true })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createRecurringTemplate(
+  type: 'income' | 'expense',
+  itemName: string,
+  defaultAmount: number,
+): Promise<RecurringTemplate> {
+  const { data, error } = await supabase
+    .from('recurring_templates')
+    .insert({ type, item_name: itemName, default_amount: defaultAmount })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateRecurringTemplate(
+  id: string,
+  updates: { item_name?: string; default_amount?: number; sort_order?: number },
+): Promise<RecurringTemplate> {
+  const { data, error } = await supabase
+    .from('recurring_templates')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteRecurringTemplate(id: string): Promise<void> {
+  const { error } = await supabase.from('recurring_templates').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchMonthlyRecurringRecords(month: string): Promise<MonthlyRecurringRecord[]> {
+  const { data, error } = await supabase
+    .from('monthly_recurring_records')
+    .select('*')
+    .eq('month', month)
+  if (error) throw error
+  return data ?? []
+}
+
+export async function upsertMonthlyRecurringRecord(
+  templateId: string,
+  month: string,
+  amount: number,
+): Promise<MonthlyRecurringRecord> {
+  const { data, error } = await supabase
+    .from('monthly_recurring_records')
+    .upsert({ template_id: templateId, month, amount }, { onConflict: 'template_id,month' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
 }

@@ -121,3 +121,62 @@ CREATE INDEX IF NOT EXISTS idx_time_logs_start_time ON time_logs(start_time);
 
 ALTER TABLE time_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all" ON time_logs USING (true) WITH CHECK (true);
+
+-- 家計簿（4大予算プール＋心理動機）
+CREATE TABLE IF NOT EXISTS financial_logs (
+  id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  amount        INTEGER NOT NULL,
+  item_name     TEXT NOT NULL DEFAULT '',
+  base_category TEXT NOT NULL CHECK (base_category IN ('food', 'daily', 'book', 'transport')),
+  motivation    TEXT NOT NULL CHECK (motivation IN ('need', 'pleasure')),
+  target_pool   TEXT NOT NULL CHECK (target_pool IN ('food_pool', 'daily_pool', 'growth_pool', 'pleasure_pool')),
+  tags          TEXT[] DEFAULT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_financial_logs_created_at ON financial_logs(created_at);
+
+ALTER TABLE financial_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON financial_logs USING (true) WITH CHECK (true);
+
+-- 月次予算設定（ロールオーバー含む）
+CREATE TABLE IF NOT EXISTS budget_settings (
+  month            TEXT PRIMARY KEY,  -- '2026-06'
+  food_base        INTEGER NOT NULL DEFAULT 30000,
+  daily_base       INTEGER NOT NULL DEFAULT 10000,
+  pleasure_base    INTEGER NOT NULL DEFAULT 15000,
+  food_rollover    INTEGER NOT NULL DEFAULT 0,
+  daily_rollover   INTEGER NOT NULL DEFAULT 0,
+  pleasure_rollover INTEGER NOT NULL DEFAULT 0,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE budget_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON budget_settings USING (true) WITH CHECK (true);
+
+-- 固定收支模板（母版）
+CREATE TABLE IF NOT EXISTS recurring_templates (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type            TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+  item_name       TEXT NOT NULL,
+  default_amount  INTEGER NOT NULL CHECK (default_amount > 0),
+  sort_order      INTEGER NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE recurring_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON recurring_templates USING (true) WITH CHECK (true);
+
+-- 月度固定收支实例（每月一号自动从模板生成）
+CREATE TABLE IF NOT EXISTS monthly_recurring_records (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  template_id     UUID NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
+  month           TEXT NOT NULL,  -- '2026-06'
+  amount          INTEGER NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(template_id, month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_recurring_month ON monthly_recurring_records(month);
+ALTER TABLE monthly_recurring_records ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON monthly_recurring_records USING (true) WITH CHECK (true);
