@@ -1,6 +1,13 @@
 export type PeriodType = 'frequency' | 'weekday'
 export type TaskStatus = 'active' | 'disabled'
-export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep'
+export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep' | 'focus'
+
+export type TimeCategory = 'job_hunting' | 'self_growth'
+
+export const TIME_CATEGORIES: { key: TimeCategory; label: string; emoji: string }[] = [
+  { key: 'job_hunting', label: '就職活動', emoji: '💼' },
+  { key: 'self_growth', label: '自己投資', emoji: '📚' },
+]
 
 export interface Note {
   id: string
@@ -117,3 +124,22 @@ export const CRAVING_ALTERNATIVES = [
   '氷を食べてみる（噛む欲を満たす）',
   '寝る準備を始めよう',
 ] as const
+
+export interface TimeLog {
+  id: string
+  category: TimeCategory
+  start_time: string
+  end_time: string | null
+  duration: number | null
+  summary: string | null
+  tags: string[] | null
+  created_at: string
+}
+
+export interface TimeLogFormData {
+  category: TimeCategory
+  start_time: string
+  end_time: string | null
+  summary: string | null
+  tags: string[] | null
+}

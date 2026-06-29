@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData } from '../types'
 import { CATEGORY_COLOR_PAIRS } from '../types'
 
 // ── Tasks ──
@@ -342,4 +342,89 @@ export async function upsertSleepLog(
     .single()
   if (error) throw error
   return data
+}
+
+// ── Time Logs ──
+
+export async function fetchTimeLogs(dateFrom: string, dateTo: string): Promise<TimeLog[]> {
+  const { data, error } = await supabase
+    .from('time_logs')
+    .select('*')
+    .gte('start_time', dateFrom)
+    .lte('start_time', dateTo + 'T23:59:59Z')
+    .order('start_time', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createTimeLog(form: TimeLogFormData): Promise<TimeLog> {
+  const duration = form.start_time && form.end_time
+    ? Math.round((new Date(form.end_time).getTime() - new Date(form.start_time).getTime()) / 60000)
+    : null
+  const { data, error } = await supabase
+    .from('time_logs')
+    .insert({
+      category: form.category,
+      start_time: form.start_time,
+      end_time: form.end_time,
+      duration,
+      summary: form.summary || null,
+      tags: form.tags || null,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateTimeLog(
+  id: string,
+  updates: Partial<{
+    end_time: string | null
+    start_time: string | null
+    summary: string | null
+    tags: string[] | null
+    category: string
+  }>
+): Promise<TimeLog> {
+  const payload: Record<string, unknown> = {}
+  if (updates.end_time !== undefined) payload.end_time = updates.end_time
+  if (updates.start_time !== undefined) payload.start_time = updates.start_time
+  if (updates.summary !== undefined) payload.summary = updates.summary
+  if (updates.tags !== undefined) payload.tags = updates.tags
+  if (updates.category !== undefined) payload.category = updates.category
+
+  const { data, error } = await supabase
+    .from('time_logs')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function finishTimeLog(id: string, endTime: string, summary?: string): Promise<TimeLog> {
+  const { data: existing, error: fetchErr } = await supabase
+    .from('time_logs')
+    .select('start_time')
+    .eq('id', id)
+    .single()
+  if (fetchErr) throw fetchErr
+
+  const duration = Math.round((new Date(endTime).getTime() - new Date(existing.start_time).getTime()) / 60000)
+
+  const { data, error } = await supabase
+    .from('time_logs')
+    .update({ end_time: endTime, duration, summary: summary || null })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteTimeLog(id: string): Promise<void> {
+  const { error } = await supabase.from('time_logs').delete().eq('id', id)
+  if (error) throw error
 }

@@ -104,3 +104,20 @@ CREATE INDEX IF NOT EXISTS idx_craving_logs_created_at ON craving_logs(created_a
 
 ALTER TABLE craving_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all" ON craving_logs USING (true) WITH CHECK (true);
+
+-- 時間トラッキング（就活/自己投資の集中記録）
+CREATE TABLE IF NOT EXISTS time_logs (
+  id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  category   TEXT NOT NULL CHECK (category IN ('job_hunting', 'self_growth')),
+  start_time TIMESTAMPTZ NOT NULL,
+  end_time   TIMESTAMPTZ,
+  duration   INTEGER,
+  summary    TEXT,
+  tags       TEXT[] DEFAULT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_time_logs_start_time ON time_logs(start_time);
+
+ALTER TABLE time_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON time_logs USING (true) WITH CHECK (true);

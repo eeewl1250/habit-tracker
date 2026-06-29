@@ -18,6 +18,7 @@ const modes: { key: ViewMode; label: string }[] = [
   { key: 'sleep', label: '睡眠' },
   { key: 'week', label: '週' },
   { key: 'month', label: '月' },
+  { key: 'focus', label: '集中' },
   { key: 'heatmap', label: '🔥' },
   { key: 'stats', label: '統計' },
   { key: 'notes', label: 'メモ' },

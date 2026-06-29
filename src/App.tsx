@@ -9,6 +9,7 @@ import { NotesView } from './components/NotesView'
 import { MenstruationView } from './components/MenstruationView'
 import { CravingView } from './components/CravingView'
 import { SleepView } from './components/SleepView'
+import { FocusView } from './components/FocusView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -19,6 +20,7 @@ import { useViewDates } from './hooks/useViewDates'
 import { useToast } from './hooks/useToast'
 import { useNoteFlow } from './hooks/useNoteFlow'
 import { useSleepLogs } from './hooks/useSleepLogs'
+import { useTimeLogs } from './hooks/useTimeLogs'
 import { fetchCategories } from './lib/api'
 import type { Category, ViewMode } from './types'
 
@@ -29,6 +31,7 @@ function App() {
   const toast = useToast()
   const noteFlow = useNoteFlow()
   const sleepLogs = useSleepLogs()
+  const timeLogs = useTimeLogs()
 
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
@@ -81,6 +84,14 @@ function App() {
     loadSleepLogs()
   }, [loadSleepLogs])
 
+  const focusDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
+  useEffect(() => {
+    timeLogs.load(
+      format(subDays(dates.dateRange.start, 31), 'yyyy-MM-dd'),
+      format(addDays(dates.dateRange.end, 31), 'yyyy-MM-dd')
+    )
+  }, [focusDateRangeStr, timeLogs.load])
+
   const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
 
   const refreshCategories = useCallback(() => {
@@ -108,6 +119,7 @@ function App() {
 
   const isCraving = dates.viewMode === 'craving'
   const isSleep = dates.viewMode === 'sleep'
+  const isFocus = dates.viewMode === 'focus'
   const isDark = isCraving || isSleep
 
   return (
@@ -121,7 +133,7 @@ function App() {
         onViewModeChange={handleViewModeChange}
         managing={showManagement}
         onManage={handleManage}
-        hideDateNav={dates.viewMode === 'menstruation' || isCraving}
+        hideDateNav={dates.viewMode === 'menstruation' || isCraving || isFocus}
         dark={isDark}
       />
 
@@ -139,6 +151,8 @@ function App() {
           <CravingView />
         ) : dates.viewMode === 'menstruation' ? (
           <MenstruationView />
+        ) : isFocus ? (
+          <FocusView timeLogs={timeLogs} baseDate={dates.baseDate} />
         ) : isSleep ? (
           <SleepView
             sleepLogs={sleepLogs.logs}
@@ -218,7 +232,7 @@ function App() {
         )}
       </main>
 
-      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && (
+      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -227,7 +241,7 @@ function App() {
         </button>
       )}
 
-      {dates.viewMode !== 'menstruation' && !isCraving && !isSleep && (
+      {dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && (
         <>
           <Toast
             key={toast.key}
