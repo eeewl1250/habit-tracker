@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo } from 'react'
-import { format, subMonths } from 'date-fns'
-import type { BudgetSettings, TargetPool, FinanceRecord } from '../types'
+import { useState, useCallback } from 'react'
+import { format } from 'date-fns'
+import type { BudgetSettings, TargetPool } from '../types'
 import { DEFAULT_BUDGET_BASES } from '../types'
-import { fetchBudgetSettings, upsertBudgetSettings, fetchBudgetSettingsBatch } from '../lib/api'
+import { upsertBudgetSettings, fetchBudgetSettingsBatch } from '../lib/api'
 
 function prevMonth(month: string): string {
   const [y, m] = month.split('-').map(Number)

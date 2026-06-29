@@ -1,6 +1,6 @@
 export type PeriodType = 'frequency' | 'weekday'
 export type TaskStatus = 'active' | 'disabled'
-export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep' | 'focus'
+export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep' | 'focus' | 'finance'
 
 export type TimeCategory = 'job_hunting' | 'self_growth'
 

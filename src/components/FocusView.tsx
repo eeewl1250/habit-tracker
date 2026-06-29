@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, differenceInMinutes, isSameDay } from 'date-fns'
+import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, differenceInMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import type { TimeLog, TimeCategory } from '../types'
@@ -482,7 +482,7 @@ function Analytics({ logs, baseDate }: { logs: TimeLog[]; baseDate: Date }) {
               <XAxis dataKey="date" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} unit="h" />
               <Tooltip
-                formatter={(value: number) => [`${value.toFixed(1)}h`, '']}
+                formatter={(value) => typeof value === 'number' ? [`${value.toFixed(1)}h`, ''] : ['', '']}
                 contentStyle={{ fontSize: 12 }}
               />
               <Line type="monotone" dataKey="job" stroke={COLORS.job_hunting} strokeWidth={2} dot={{ r: 2 }} name="就職" />
@@ -502,7 +502,7 @@ function Analytics({ logs, baseDate }: { logs: TimeLog[]; baseDate: Date }) {
                   <Cell key={i} fill={pieData[i].color} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value: number) => [`${value.toFixed(1)}h`, '']} contentStyle={{ fontSize: 12 }} />
+              <Tooltip formatter={(value) => typeof value === 'number' ? [`${value.toFixed(1)}h`, ''] : ['', '']} contentStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-4 text-xs">

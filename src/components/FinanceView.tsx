@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useCallback } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -656,7 +656,7 @@ function TimeMoneyChart({ records, timeLogs }: { records: FinanceRecord[]; timeL
         <LineChart data={dailyData}>
           <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={Math.max(1, Math.floor(dailyData.length / 7))} />
           <YAxis tick={{ fontSize: 10 }} unit="¥" />
-          <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value: number) => [`¥${value.toLocaleString()}`, '']} />
+          <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value) => typeof value === 'number' ? [`¥${value.toLocaleString()}`, ''] : ['', '']} />
           <Line type="monotone" dataKey="bonus" stroke="#10B981" strokeWidth={2} dot={false} name="集中ボーナス" />
           <Line type="monotone" dataKey="spent" stroke="#EF4444" strokeWidth={2} dot={false} name="娯楽消費" />
         </LineChart>
