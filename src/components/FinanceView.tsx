@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo, useEffect } from 'react'
-import { format, startOfMonth, endOfMonth } from 'date-fns'
+import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import type { FinanceRecord, BaseCategory, Motivation, TargetPool, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord } from '../types'
@@ -890,6 +890,134 @@ function TimeMoneyChart({ records, timeLogs }: { records: FinanceRecord[]; timeL
   )
 }
 
+function MonthlyCalendar({
+  yearMonth, records, onPrev, onNext, onToday, onEdit, onDelete,
+}: {
+  yearMonth: Date
+  records: FinanceRecord[]
+  onPrev: () => void
+  onNext: () => void
+  onToday: () => void
+  onEdit: (record: FinanceRecord) => void
+  onDelete: (id: string) => void
+}) {
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const today = new Date()
+  const daysInMonth = endOfMonth(yearMonth).getDate()
+  const firstDayOfWeek = yearMonth.getDay()
+  const startOffset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1
+  const monthLabel = format(yearMonth, 'yyyy年 M月', { locale: ja })
+  const weekDays = ['月', '火', '水', '木', '金', '土', '日']
+
+  const recordsByDay = useMemo(() => {
+    const map = new Map<number, FinanceRecord[]>()
+    for (const r of records) {
+      const d = new Date(r.created_at).getDate()
+      if (!map.has(d)) map.set(d, [])
+      map.get(d)!.push(r)
+    }
+    return map
+  }, [records])
+
+  const dayRecords = selectedDay ? (recordsByDay.get(selectedDay) ?? []) : []
+
+  const dayTotal = (day: number) => {
+    const dayRecs = recordsByDay.get(day)
+    if (!dayRecs) return 0
+    return dayRecs.reduce((sum, r) => sum + r.amount, 0)
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">📅</span>
+          <span className="font-bold text-gray-800 text-sm">{monthLabel}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={onPrev} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">&lt;</button>
+          <button onClick={onToday} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">今日</button>
+          <button onClick={onNext} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">&gt;</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 mb-1">
+        {weekDays.map((d) => (
+          <div key={d} className={`text-center text-[10px] font-medium py-1 ${d === '日' ? 'text-red-400' : d === '土' ? 'text-blue-400' : 'text-gray-400'}`}>{d}</div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-lg overflow-hidden">
+        {Array.from({ length: startOffset }).map((_, i) => (
+          <div key={`e-${i}`} className="bg-white p-1 min-h-14" />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1
+          const total = dayTotal(day)
+          const hasRecords = recordsByDay.has(day)
+          const isSelected = selectedDay === day
+          const isToday = day === today.getDate() && yearMonth.getMonth() === today.getMonth() && yearMonth.getFullYear() === today.getFullYear()
+          const colIdx = (startOffset + i) % 7
+
+          return (
+            <button
+              key={day}
+              onClick={() => setSelectedDay(isSelected ? null : day)}
+              className={`bg-white p-1 text-left transition-colors hover:bg-gray-50 min-h-14 ${isSelected ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isToday ? 'bg-blue-50' : ''}`}
+            >
+              <span className={`inline-flex items-center justify-center w-4 h-4 text-[10px] font-medium leading-tight ${colIdx === 6 ? 'text-red-400' : colIdx === 5 ? 'text-blue-400' : 'text-gray-500'} ${isToday ? 'bg-blue-600 text-white rounded-full' : ''}`}>
+                {day}
+              </span>
+              {hasRecords && (
+                <div className="text-[9px] font-bold text-gray-700 truncate leading-tight mt-0.5">
+                  ¥{total.toLocaleString()}
+                </div>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {selectedDay !== null && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <div className="text-xs font-bold text-gray-700 mb-2">
+            {format(new Date(yearMonth.getFullYear(), yearMonth.getMonth(), selectedDay), 'M/d (E)', { locale: ja })} - ¥{dayTotal(selectedDay).toLocaleString()}
+          </div>
+          {dayRecords.length === 0 ? (
+            <p className="text-[10px] text-gray-400 py-2">この日の記録はありません</p>
+          ) : (
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {dayRecords.map((r) => {
+                const pool = BUDGET_POOLS.find((p) => p.key === r.target_pool) ?? { icon: '📦', label: 'その他' }
+                return (
+                  <div key={r.id} className="flex items-center justify-between py-1.5 px-2 hover:bg-gray-50 rounded-lg group">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs">{pool.icon}</span>
+                      <div className="min-w-0">
+                        <div className="text-xs text-gray-700 truncate">{r.item_name || '名称なし'}</div>
+                        {r.tags && r.tags.length > 0 && (
+                          <div className="text-[9px] text-gray-400">{r.tags.map((t) => <span key={t} className="mr-1">#{t}</span>)}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className={`text-xs font-bold ${r.motivation === 'entertainment' ? 'text-pink-500' : r.motivation === 'going_out' ? 'text-orange-500' : 'text-gray-700'}`}>
+                        ¥{r.amount.toLocaleString()}
+                      </span>
+                      <button onClick={() => onEdit(r)} className="text-gray-200 hover:text-blue-500 text-[10px] opacity-0 group-hover:opacity-100">✏️</button>
+                      <button onClick={() => onDelete(r.id)} className="text-gray-200 hover:text-red-500 text-[10px] opacity-0 group-hover:opacity-100">✕</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function FinanceView({
   records, timeLogs, budget,
   recurringTemplates, recurringRecords, recurringIncome, recurringExpense, recurringNet,
@@ -898,12 +1026,18 @@ export function FinanceView({
 }: FinanceViewProps) {
   const [showRecurring, setShowRecurring] = useState(false)
   const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null)
+  const [calendarMonth, setCalendarMonth] = useState(startOfMonth(new Date()))
   const now = new Date()
   const monthStr = format(now, 'yyyy-MM')
 
   const monthlyRecords = useMemo(
     () => records.filter((r) => r.created_at.startsWith(monthStr)),
     [records, monthStr]
+  )
+
+  const calendarRecords = useMemo(
+    () => records.filter((r) => r.created_at.startsWith(format(calendarMonth, 'yyyy-MM'))),
+    [records, calendarMonth]
   )
 
   const poolTotals = useMemo(() => {
@@ -926,12 +1060,10 @@ export function FinanceView({
 
   const timeBonus = Math.floor((monthlyJobMinutes / 60) * TIME_BONUS_RATE)
 
-  const recentRecords = useMemo(
-    () => records.slice(0, 20),
-    [records]
-  )
-
   const monthLabel = format(now, 'yyyy年 M月', { locale: ja })
+  const handlePrevMonth = () => setCalendarMonth((prev) => subMonths(prev, 1))
+  const handleNextMonth = () => setCalendarMonth((prev) => addMonths(prev, 1))
+  const handleTodayMonth = () => setCalendarMonth(startOfMonth(new Date()))
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -941,52 +1073,15 @@ export function FinanceView({
         <div className="space-y-4">
           <QuickExpense onAdd={onAdd} records={records} />
 
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-lg">📋</span>
-              <span className="font-bold text-gray-800 text-sm">最近の取引</span>
-            </div>
-            {recentRecords.length === 0 ? (
-              <p className="text-center text-gray-400 py-4 text-xs">まだ記録がありません</p>
-            ) : (
-              <div className="space-y-1 max-h-64 overflow-y-auto">
-                {recentRecords.map((r) => {
-                  const pool = BUDGET_POOLS.find((p) => p.key === r.target_pool) ?? { icon: '📦', label: 'その他' }
-                  return (
-                    <div key={r.id} className="flex items-center justify-between py-1.5 px-2 hover:bg-gray-50 rounded-lg group">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span>{pool.icon}</span>
-                        <div className="min-w-0">
-                          <div className="text-xs text-gray-700 truncate">{r.item_name || '名称なし'}</div>
-                          <div className="text-[10px] text-gray-400">
-                            {format(new Date(r.created_at), 'M/d HH:mm')}
-                            {r.tags?.map((t) => <span key={t} className="ml-1 text-gray-300">#{t}</span>)}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs font-bold ${
-                          r.motivation === 'entertainment' ? 'text-pink-500' :
-                          r.motivation === 'going_out' ? 'text-orange-500' :
-                          'text-gray-700'
-                        }`}>
-                          ¥{r.amount.toLocaleString()}
-                        </span>
-                        <button onClick={() => setEditingRecord(r)}
-                          className="text-gray-200 hover:text-blue-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                          ✏️
-                        </button>
-                        <button onClick={() => onDelete(r.id)}
-                          className="text-gray-200 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+          <MonthlyCalendar
+            yearMonth={calendarMonth}
+            records={calendarRecords}
+            onPrev={handlePrevMonth}
+            onNext={handleNextMonth}
+            onToday={handleTodayMonth}
+            onEdit={(record) => setEditingRecord(record)}
+            onDelete={onDelete}
+          />
         </div>
 
         <div className="space-y-4">

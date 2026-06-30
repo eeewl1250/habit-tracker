@@ -107,8 +107,8 @@ function App() {
   const financeMonthStr = format(new Date(), 'yyyy-MM')
   useEffect(() => {
     finance.load(
-      format(subDays(new Date(), 60), 'yyyy-MM-dd'),
-      format(addDays(new Date(), 1), 'yyyy-MM-dd')
+      format(subDays(new Date(), 180), 'yyyy-MM-dd'),
+      format(addDays(new Date(), 31), 'yyyy-MM-dd')
     )
   }, [finance.load, financeMonthStr])
 
