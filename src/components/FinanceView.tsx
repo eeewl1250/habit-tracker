@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react'
+﻿import { useState, useMemo, useEffect } from 'react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -20,22 +20,44 @@ interface FinanceViewProps {
     base_category: BaseCategory
     motivation: Motivation
     tags: string[] | null
+    created_at?: string
   }) => void
+  onUpdate: (id: string, updates: Partial<{
+    amount: number
+    item_name: string
+    base_category: BaseCategory
+    motivation: Motivation
+    tags: string[] | null
+    created_at?: string
+  }>) => void
   onDelete: (id: string) => void
-  onUpdateBase: (field: 'food_base' | 'daily_base' | 'pleasure_base', value: number) => void
+  onUpdateBase: (field: 'food_base' | 'daily_base' | 'entertainment_base' | 'going_out_base', value: number) => void
   onAddRecurringTemplate: (type: 'income' | 'expense', name: string, amount: number) => void
   onEditRecurringTemplate: (id: string, updates: { item_name?: string; default_amount?: number }) => void
   onDeleteRecurringTemplate: (id: string) => void
   onUpdateRecurringRecord: (templateId: string, amount: number) => void
 }
 
-function QuickExpense({ onAdd }: { onAdd: FinanceViewProps['onAdd'] }) {
+function QuickExpense({ onAdd, records }: { onAdd: FinanceViewProps['onAdd']; records: FinanceRecord[] }) {
   const [amount, setAmount] = useState('')
   const [itemName, setItemName] = useState('')
   const [baseCat, setBaseCat] = useState<BaseCategory>('food')
   const [motivation, setMotivation] = useState<Motivation>('need')
   const [tagInput, setTagInput] = useState('')
   const [tags, setTags] = useState<string[]>([])
+  const [recordDate, setRecordDate] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"))
+
+  const existingTags = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of records) {
+      if (r.tags) {
+        for (const t of r.tags) {
+          set.add(t)
+        }
+      }
+    }
+    return Array.from(set).sort()
+  }, [records])
 
   const targetPool = resolveTargetPool(baseCat, motivation)
   const poolInfo = BUDGET_POOLS.find((p) => p.key === targetPool)!
@@ -52,9 +74,11 @@ function QuickExpense({ onAdd }: { onAdd: FinanceViewProps['onAdd'] }) {
     const amt = parseInt(amount, 10)
     if (!amt || amt <= 0) return
     if (!itemName.trim()) return
-    onAdd({ amount: amt, item_name: itemName.trim(), base_category: baseCat, motivation, tags: tags.length > 0 ? tags : null })
+    const created_at = recordDate ? new Date(recordDate).toISOString() : undefined
+    onAdd({ amount: amt, item_name: itemName.trim(), base_category: baseCat, motivation, tags: tags.length > 0 ? tags : null, created_at })
     setAmount('')
     setItemName('')
+    setRecordDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"))
     setTags([])
     setTagInput('')
   }
@@ -80,6 +104,12 @@ function QuickExpense({ onAdd }: { onAdd: FinanceViewProps['onAdd'] }) {
         </div>
 
         <div>
+           <label className="block text-xs text-gray-500 mb-1">日時</label>
+          <input type="datetime-local" value={recordDate} onChange={(e) => setRecordDate(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        </div>
+
+        <div>
            <label className="block text-xs text-gray-500 mb-1">カテゴリ</label>
           <div className="flex gap-1.5">
             {BASE_CATEGORIES.map((c) => (
@@ -95,26 +125,35 @@ function QuickExpense({ onAdd }: { onAdd: FinanceViewProps['onAdd'] }) {
 
         <div>
            <label className="block text-xs text-gray-500 mb-1">動機</label>
-          <div className="flex gap-2">
-            <label className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+          <div className="flex gap-1.5">
+            <label className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
               motivation === 'need' ? 'bg-green-100 text-green-700 ring-2 ring-green-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}>
               <input type="radio" name="motivation" value="need" checked={motivation === 'need'}
                 onChange={() => setMotivation('need')} className="sr-only" />
               🛡️ 必要
             </label>
-            <label className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
-              motivation === 'pleasure' ? 'bg-pink-100 text-pink-700 ring-2 ring-pink-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            <label className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+              motivation === 'entertainment' ? 'bg-pink-100 text-pink-700 ring-2 ring-pink-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}>
-              <input type="radio" name="motivation" value="pleasure" checked={motivation === 'pleasure'}
-                onChange={() => setMotivation('pleasure')} className="sr-only" />
-              ✨ 娯楽
+              <input type="radio" name="motivation" value="entertainment" checked={motivation === 'entertainment'}
+                onChange={() => setMotivation('entertainment')} className="sr-only" />
+              🎮 娯楽
+            </label>
+            <label className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+              motivation === 'going_out' ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}>
+              <input type="radio" name="motivation" value="going_out" checked={motivation === 'going_out'}
+                onChange={() => setMotivation('going_out')} className="sr-only" />
+              🍽️ 外出
             </label>
           </div>
         </div>
 
         <div className={`px-3 py-2 rounded-lg text-xs font-medium ${
-          targetPool === 'pleasure_pool' ? 'bg-pink-50 text-pink-700' : 'bg-blue-50 text-blue-700'
+          targetPool === 'entertainment_pool' ? 'bg-pink-50 text-pink-700' :
+          targetPool === 'going_out_pool' ? 'bg-orange-50 text-orange-700' :
+          'bg-blue-50 text-blue-700'
         }`}>
           💡 この支出は <strong>{poolInfo.icon} {poolInfo.label}</strong> から差し引かれます
         </div>
@@ -135,12 +174,171 @@ function QuickExpense({ onAdd }: { onAdd: FinanceViewProps['onAdd'] }) {
               className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="例: 文房具" />
             <button onClick={handleAddTag} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200">追加</button>
           </div>
+          {existingTags.length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-1">
+              {existingTags.map((t) => (
+                <button key={t} onClick={() => { if (!tags.includes(t)) setTags((prev) => [...prev, t]) }}
+                  className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
+                    tags.includes(t) ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                  }`}>
+                  #{t}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <button onClick={handleSubmit}
           className="w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 active:scale-[0.98] transition-all">
           記録する
         </button>
+      </div>
+    </div>
+  )
+}
+
+function EditExpenseModal({
+  record, onSave, onClose,
+}: {
+  record: FinanceRecord | null
+  onSave: (id: string, updates: Partial<FinanceRecord>) => void
+  onClose: () => void
+}) {
+  const [amount, setAmount] = useState(String(record?.amount ?? ''))
+  const [itemName, setItemName] = useState(record?.item_name ?? '')
+  const [baseCat, setBaseCat] = useState<BaseCategory>(record?.base_category ?? 'food')
+  const [motivation, setMotivation] = useState<Motivation>(record?.motivation ?? 'need')
+  const [tagInput, setTagInput] = useState('')
+  const [tags, setTags] = useState<string[]>(record?.tags ?? [])
+  const [recordDate, setRecordDate] = useState(record ? format(new Date(record.created_at), "yyyy-MM-dd'T'HH:mm") : format(new Date(), "yyyy-MM-dd'T'HH:mm"))
+
+  useEffect(() => {
+    if (record) {
+      setAmount(String(record.amount))
+      setItemName(record.item_name)
+      setBaseCat(record.base_category)
+      setMotivation(record.motivation)
+      setTags(record.tags ?? [])
+      setRecordDate(format(new Date(record.created_at), "yyyy-MM-dd'T'HH:mm"))
+    }
+  }, [record])
+
+  if (!record) return null
+
+  const handleAddTag = () => {
+    const t = tagInput.trim()
+    if (t && !tags.includes(t)) {
+      setTags((prev) => [...prev, t])
+      setTagInput('')
+    }
+  }
+
+  const handleSave = () => {
+    const amt = parseInt(amount, 10)
+    if (!amt || amt <= 0) return
+    if (!itemName.trim()) return
+    onSave(record.id, {
+      amount: amt,
+      item_name: itemName.trim(),
+      base_category: baseCat,
+      motivation,
+      tags: tags.length > 0 ? tags : null,
+      created_at: new Date(recordDate).toISOString(),
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-30 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-bold text-gray-800">取引を編集</span>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+        </div>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs text-gray-500 mb-0.5">金額</label>
+              <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+            <div className="flex-[2]">
+              <label className="block text-xs text-gray-500 mb-0.5">名前</label>
+              <input type="text" value={itemName} onChange={(e) => setItemName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-0.5">日時</label>
+            <input type="datetime-local" value={recordDate} onChange={(e) => setRecordDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">カテゴリ</label>
+            <div className="flex gap-1.5">
+              {BASE_CATEGORIES.map((c) => (
+                <button key={c.key} onClick={() => setBaseCat(c.key)}
+                  className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                    baseCat === c.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">動機</label>
+            <div className="flex gap-1.5">
+              <label className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                motivation === 'need' ? 'bg-green-100 text-green-700 ring-2 ring-green-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+                <input type="radio" name="edit-motivation" value="need" checked={motivation === 'need'}
+                  onChange={() => setMotivation('need')} className="sr-only" />
+                🛡️ 必要
+              </label>
+              <label className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                motivation === 'entertainment' ? 'bg-pink-100 text-pink-700 ring-2 ring-pink-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+                <input type="radio" name="edit-motivation" value="entertainment" checked={motivation === 'entertainment'}
+                  onChange={() => setMotivation('entertainment')} className="sr-only" />
+                🎮 娯楽
+              </label>
+              <label className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                motivation === 'going_out' ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+                <input type="radio" name="edit-motivation" value="going_out" checked={motivation === 'going_out'}
+                  onChange={() => setMotivation('going_out')} className="sr-only" />
+                🍽️ 外出
+              </label>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">タグ</label>
+            <div className="flex gap-1 flex-wrap mb-1">
+              {tags.map((t) => (
+                <span key={t} className="px-2 py-0.5 bg-gray-100 rounded text-[10px] text-gray-600 flex items-center gap-1">
+                  #{t}
+                  <button onClick={() => setTags((prev) => prev.filter((x) => x !== t))} className="text-gray-400 hover:text-gray-600">&times;</button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <input type="text" value={tagInput} onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="タグを追加" />
+              <button onClick={handleAddTag} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200">追加</button>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose}
+              className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200">
+              キャンセル
+            </button>
+            <button onClick={handleSave}
+              className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700">
+              保存
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -356,7 +554,7 @@ function BudgetDashboard({
   timeBonus: number
   focusMinutes: number
   monthLabel: string
-  onUpdateBase: (field: 'food_base' | 'daily_base' | 'pleasure_base', value: number) => void
+  onUpdateBase: (field: 'food_base' | 'daily_base' | 'entertainment_base' | 'going_out_base', value: number) => void
   recurringTemplates: RecurringTemplate[]
   recurringRecords: MonthlyRecurringRecord[]
   recurringIncome: number
@@ -368,9 +566,10 @@ function BudgetDashboard({
   const pools = useMemo(() => {
     const foodBudget = budget.food_base + budget.food_rollover
     const dailyBudget = budget.daily_base + budget.daily_rollover
-    const pleasureBudget = budget.pleasure_base + budget.pleasure_rollover + timeBonus
+    const entertainmentBudget = (budget.entertainment_base ?? 10000) + (budget.entertainment_rollover ?? 0) + timeBonus
+    const goingOutBudget = (budget.going_out_base ?? 5000) + (budget.going_out_rollover ?? 0)
 
-    return [
+    const result = [
       {
         key: 'food_pool' as TargetPool,
         icon: '🥦',
@@ -414,20 +613,36 @@ function BudgetDashboard({
         rolloverLabel: null,
       },
       {
-        key: 'pleasure_pool' as TargetPool,
-        icon: '🎉',
+        key: 'entertainment_pool' as TargetPool,
+        icon: '🎮',
         label: '娯楽',
         color: '#E91E63',
         bgColor: '#FCE4EC',
-        budget: pleasureBudget,
-        spent: poolTotals.pleasure_pool,
-        base: budget.pleasure_base,
-        rollover: budget.pleasure_rollover,
+        budget: entertainmentBudget,
+        spent: poolTotals.entertainment_pool,
+        base: budget.entertainment_base ?? 10000,
+        rollover: budget.entertainment_rollover ?? 0,
         bonus: timeBonus,
-        baseField: 'pleasure_base' as const,
-        rolloverLabel: budget.pleasure_rollover >= 0 ? `+¥${budget.pleasure_rollover.toLocaleString()}` : null,
+        baseField: 'entertainment_base' as const,
+        rolloverLabel: (budget.entertainment_rollover ?? 0) >= 0 ? `+¥${(budget.entertainment_rollover ?? 0).toLocaleString()}` : null,
+      },
+      {
+        key: 'going_out_pool' as TargetPool,
+        icon: '🍽️',
+        label: '外出',
+        color: '#FF9800',
+        bgColor: '#FFF3E0',
+        budget: goingOutBudget,
+        spent: poolTotals.going_out_pool,
+        base: budget.going_out_base ?? 5000,
+        rollover: budget.going_out_rollover ?? 0,
+        bonus: null as number | null,
+        baseField: 'going_out_base' as const,
+        rolloverLabel: (budget.going_out_rollover ?? 0) >= 0 ? `+¥${(budget.going_out_rollover ?? 0).toLocaleString()}` : null,
       },
     ]
+
+    return result
   }, [budget, poolTotals, timeBonus])
 
   const segments = 10
@@ -621,7 +836,7 @@ function TimeMoneyChart({ records, timeLogs }: { records: FinanceRecord[]; timeL
     }
 
     for (const r of records) {
-      if (r.target_pool !== 'pleasure_pool') continue
+      if (r.target_pool !== 'entertainment_pool' && r.target_pool !== 'going_out_pool') continue
       const day = format(new Date(r.created_at), 'yyyy-MM-dd')
       if (day.startsWith(monthStr)) {
         const entry = days.find((d) => d.date === day)
@@ -678,10 +893,11 @@ function TimeMoneyChart({ records, timeLogs }: { records: FinanceRecord[]; timeL
 export function FinanceView({
   records, timeLogs, budget,
   recurringTemplates, recurringRecords, recurringIncome, recurringExpense, recurringNet,
-  onAdd, onDelete, onUpdateBase,
+  onAdd, onUpdate, onDelete, onUpdateBase,
   onAddRecurringTemplate, onEditRecurringTemplate, onDeleteRecurringTemplate, onUpdateRecurringRecord,
 }: FinanceViewProps) {
   const [showRecurring, setShowRecurring] = useState(false)
+  const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null)
   const now = new Date()
   const monthStr = format(now, 'yyyy-MM')
 
@@ -691,7 +907,7 @@ export function FinanceView({
   )
 
   const poolTotals = useMemo(() => {
-    const map: Record<TargetPool, number> = { food_pool: 0, daily_pool: 0, growth_pool: 0, pleasure_pool: 0 }
+    const map: Record<TargetPool, number> = { food_pool: 0, daily_pool: 0, growth_pool: 0, entertainment_pool: 0, going_out_pool: 0 }
     for (const r of monthlyRecords) {
       map[r.target_pool] += r.amount
     }
@@ -723,7 +939,7 @@ export function FinanceView({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-4">
-          <QuickExpense onAdd={onAdd} />
+          <QuickExpense onAdd={onAdd} records={records} />
 
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -735,7 +951,7 @@ export function FinanceView({
             ) : (
               <div className="space-y-1 max-h-64 overflow-y-auto">
                 {recentRecords.map((r) => {
-                  const pool = BUDGET_POOLS.find((p) => p.key === r.target_pool)!
+                  const pool = BUDGET_POOLS.find((p) => p.key === r.target_pool) ?? { icon: '📦', label: 'その他' }
                   return (
                     <div key={r.id} className="flex items-center justify-between py-1.5 px-2 hover:bg-gray-50 rounded-lg group">
                       <div className="flex items-center gap-2 min-w-0">
@@ -749,9 +965,17 @@ export function FinanceView({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs font-bold ${r.motivation === 'pleasure' ? 'text-pink-500' : 'text-gray-700'}`}>
+                        <span className={`text-xs font-bold ${
+                          r.motivation === 'entertainment' ? 'text-pink-500' :
+                          r.motivation === 'going_out' ? 'text-orange-500' :
+                          'text-gray-700'
+                        }`}>
                           ¥{r.amount.toLocaleString()}
                         </span>
+                        <button onClick={() => setEditingRecord(r)}
+                          className="text-gray-200 hover:text-blue-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                          ✏️
+                        </button>
                         <button onClick={() => onDelete(r.id)}
                           className="text-gray-200 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
                           ✕
@@ -801,6 +1025,17 @@ export function FinanceView({
           onEdit={onEditRecurringTemplate}
           onDelete={onDeleteRecurringTemplate}
           onUpdateRecord={onUpdateRecurringRecord}
+        />
+      )}
+
+      {editingRecord && (
+        <EditExpenseModal
+          record={editingRecord}
+          onSave={(id, updates) => {
+            onUpdate(id, updates)
+            setEditingRecord(null)
+          }}
+          onClose={() => setEditingRecord(null)}
         />
       )}
     </div>

@@ -147,8 +147,8 @@ export interface TimeLogFormData {
 // ── Finance ──
 
 export type BaseCategory = 'food' | 'daily' | 'book' | 'transport'
-export type Motivation = 'need' | 'pleasure'
-export type TargetPool = 'food_pool' | 'daily_pool' | 'growth_pool' | 'pleasure_pool'
+export type Motivation = 'need' | 'entertainment' | 'going_out'
+export type TargetPool = 'food_pool' | 'daily_pool' | 'growth_pool' | 'entertainment_pool' | 'going_out_pool'
 
 export interface FinanceRecord {
   id: string
@@ -167,6 +167,16 @@ export interface FinanceFormData {
   base_category: BaseCategory
   motivation: Motivation
   tags: string[] | null
+  created_at?: string
+}
+
+export interface FinanceUpdateData {
+  amount?: number
+  item_name?: string
+  base_category?: BaseCategory
+  motivation?: Motivation
+  tags?: string[] | null
+  created_at?: string
 }
 
 export const BASE_CATEGORIES: { key: BaseCategory; label: string }[] = [
@@ -188,12 +198,15 @@ export const BUDGET_POOLS: {
   { key: 'food_pool', label: '基礎飲食', icon: '🥦', monthlyBudget: 30000, description: '生存剛需', color: '#4CAF50', bgColor: '#E8F5E9' },
   { key: 'daily_pool', label: '日用雑費', icon: '🧼', monthlyBudget: 10000, description: '生活剛需', color: '#2196F3', bgColor: '#E3F2FD' },
   { key: 'growth_pool', label: '自己投資', icon: '📚', monthlyBudget: Infinity, description: '人生投資', color: '#9C27B0', bgColor: '#F3E5F5' },
-  { key: 'pleasure_pool', label: '快樂欲望', icon: '🎉', monthlyBudget: 15000, description: '悦己消費', color: '#E91E63', bgColor: '#FCE4EC' },
+  { key: 'entertainment_pool', label: '娯楽', icon: '🎮', monthlyBudget: 10000, description: '娯楽費（ゲーム・推し活など）', color: '#E91E63', bgColor: '#FCE4EC' },
+  { key: 'going_out_pool', label: '外出', icon: '🍽️', monthlyBudget: 5000, description: '外食・お出かけ費', color: '#FF9800', bgColor: '#FFF3E0' },
 ]
 
 const _poolMap: Record<BaseCategory, TargetPool> = { food: 'food_pool', daily: 'daily_pool', book: 'growth_pool', transport: 'growth_pool' }
 export function resolveTargetPool(base: BaseCategory, motivation: Motivation): TargetPool {
-  return motivation === 'pleasure' ? 'pleasure_pool' : _poolMap[base]
+  if (motivation === 'entertainment') return 'entertainment_pool'
+  if (motivation === 'going_out') return 'going_out_pool'
+  return _poolMap[base]
 }
 
 export const TIME_BONUS_RATE = 100 // ¥100 per hour of job_hunting focus
@@ -202,14 +215,16 @@ export interface BudgetSettings {
   month: string
   food_base: number
   daily_base: number
-  pleasure_base: number
+  entertainment_base: number
+  going_out_base: number
   food_rollover: number
   daily_rollover: number
-  pleasure_rollover: number
+  entertainment_rollover: number
+  going_out_rollover: number
   updated_at?: string
 }
 
-export const DEFAULT_BUDGET_BASES = { food: 30000, daily: 10000, pleasure: 15000 } as const
+export const DEFAULT_BUDGET_BASES = { food: 30000, daily: 10000, entertainment: 10000, going_out: 5000 } as const
 
 // ── Recurring Items ──
 

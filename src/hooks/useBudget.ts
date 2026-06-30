@@ -20,7 +20,15 @@ export function useBudget() {
       const existing = await fetchBudgetSettingsBatch(months)
 
       const map: Record<string, BudgetSettings> = {}
-      for (const s of existing) map[s.month] = s
+      for (const s of existing) {
+        map[s.month] = {
+          ...s,
+          entertainment_base: s.entertainment_base ?? DEFAULT_BUDGET_BASES.entertainment,
+          going_out_base: s.going_out_base ?? DEFAULT_BUDGET_BASES.going_out,
+          entertainment_rollover: s.entertainment_rollover ?? 0,
+          going_out_rollover: s.going_out_rollover ?? 0,
+        }
+      }
 
       for (const m of months) {
         if (!map[m]) {
@@ -28,10 +36,12 @@ export function useBudget() {
             month: m,
             food_base: DEFAULT_BUDGET_BASES.food,
             daily_base: DEFAULT_BUDGET_BASES.daily,
-            pleasure_base: DEFAULT_BUDGET_BASES.pleasure,
+            entertainment_base: DEFAULT_BUDGET_BASES.entertainment,
+            going_out_base: DEFAULT_BUDGET_BASES.going_out,
             food_rollover: 0,
             daily_rollover: 0,
-            pleasure_rollover: 0,
+            entertainment_rollover: 0,
+            going_out_rollover: 0,
           }
           try {
             const created = await upsertBudgetSettings(defaults)
@@ -47,7 +57,7 @@ export function useBudget() {
     }
   }, [])
 
-  const updateBase = useCallback(async (month: string, field: 'food_base' | 'daily_base' | 'pleasure_base', value: number) => {
+  const updateBase = useCallback(async (month: string, field: 'food_base' | 'daily_base' | 'entertainment_base' | 'going_out_base', value: number) => {
     try {
       const updated = await upsertBudgetSettings({ month, [field]: value })
       setSettings((prev) => ({ ...prev, [month]: updated }))
@@ -67,18 +77,22 @@ export function useBudget() {
       const monthlySpend: Record<string, number> = {
         food_pool: poolTotals.food_pool,
         daily_pool: poolTotals.daily_pool,
-        pleasure_pool: poolTotals.pleasure_pool,
         growth_pool: poolTotals.growth_pool,
+        entertainment_pool: poolTotals.entertainment_pool,
+        going_out_pool: poolTotals.going_out_pool,
       }
 
       const foodBudget = cur.food_base + cur.food_rollover
       const dailyBudget = cur.daily_base + cur.daily_rollover
-      const pleasureBudget = cur.pleasure_base + cur.pleasure_rollover
+      const entertainmentBudget = cur.entertainment_base + cur.entertainment_rollover
+      const goingOutBudget = cur.going_out_base + cur.going_out_rollover
 
       const foodRemaining = foodBudget - monthlySpend.food_pool
       const dailyRemaining = dailyBudget - monthlySpend.daily_pool
-      let pleasureRemaining = pleasureBudget - monthlySpend.pleasure_pool
-      if (pleasureRemaining < 0) pleasureRemaining = 0
+      let entertainmentRemaining = entertainmentBudget - monthlySpend.entertainment_pool
+      if (entertainmentRemaining < 0) entertainmentRemaining = 0
+      let goingOutRemaining = goingOutBudget - monthlySpend.going_out_pool
+      if (goingOutRemaining < 0) goingOutRemaining = 0
 
       const nextMonth = prevMonth(month) === month ? '' : (() => {
         const [y, m] = month.split('-').map(Number)
@@ -92,7 +106,8 @@ export function useBudget() {
             month: nextMonth,
             food_rollover: foodRemaining,
             daily_rollover: dailyRemaining,
-            pleasure_rollover: pleasureRemaining,
+            entertainment_rollover: entertainmentRemaining,
+            going_out_rollover: goingOutRemaining,
           })
           setSettings((prev) => ({ ...prev, [nextMonth]: updated }))
         }

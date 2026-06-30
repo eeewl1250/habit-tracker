@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import type { FinanceRecord, FinanceFormData } from '../types'
-import { fetchFinanceRecords, createFinanceRecord, deleteFinanceRecord } from '../lib/api'
+import { fetchFinanceRecords, createFinanceRecord, deleteFinanceRecord, updateFinanceRecord } from '../lib/api'
 
 export function useFinance() {
   const [records, setRecords] = useState<FinanceRecord[]>([])
@@ -24,6 +24,16 @@ export function useFinance() {
     }
   }, [])
 
+  const update = useCallback(async (id: string, updates: Partial<FinanceFormData>): Promise<FinanceRecord | null> => {
+    try {
+      const record = await updateFinanceRecord(id, updates)
+      setRecords((prev) => prev.map((r) => (r.id === id ? record : r)))
+      return record
+    } catch {
+      return null
+    }
+  }, [])
+
   const remove = useCallback(async (id: string) => {
     try {
       await deleteFinanceRecord(id)
@@ -33,5 +43,5 @@ export function useFinance() {
     }
   }, [])
 
-  return { records, load, add, remove }
+  return { records, load, add, update, remove }
 }

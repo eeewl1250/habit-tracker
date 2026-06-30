@@ -197,6 +197,7 @@ function App() {
             recurringExpense={recurring.totalExpense}
             recurringNet={recurring.netRecurring}
             onAdd={finance.add}
+            onUpdate={finance.update}
             onDelete={finance.remove}
             onUpdateBase={(field, value) => budget.updateBase(financeMonthStr, field, value)}
             onAddRecurringTemplate={recurring.addTemplate}

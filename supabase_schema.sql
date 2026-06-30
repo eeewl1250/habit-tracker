@@ -54,6 +54,9 @@ CREATE TRIGGER tasks_updated_at
 -- ALTER TABLE tasks ADD COLUMN IF NOT EXISTS base_date DATE;
 -- ALTER TABLE daily_logs ADD COLUMN IF NOT EXISTS memo TEXT;
 -- ALTER TABLE categories ADD COLUMN IF NOT EXISTS bg_color TEXT NOT NULL DEFAULT '#E8F5E9';
+--
+-- 2026-06: 娯楽(pleasure)→娯楽(entertainment)＋外出(going_out) 分割マイグレーション
+-- マイグレーション用SQLは supabase_migration_202606.sql を参照
 
 -- RLS: 全員が全データを読み書き（個人利用のため）
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
@@ -122,14 +125,14 @@ CREATE INDEX IF NOT EXISTS idx_time_logs_start_time ON time_logs(start_time);
 ALTER TABLE time_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all" ON time_logs USING (true) WITH CHECK (true);
 
--- 家計簿（4大予算プール＋心理動機）
+-- 家計簿（予算プール＋心理動機）
 CREATE TABLE IF NOT EXISTS financial_logs (
   id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   amount        INTEGER NOT NULL,
   item_name     TEXT NOT NULL DEFAULT '',
   base_category TEXT NOT NULL CHECK (base_category IN ('food', 'daily', 'book', 'transport')),
-  motivation    TEXT NOT NULL CHECK (motivation IN ('need', 'pleasure')),
-  target_pool   TEXT NOT NULL CHECK (target_pool IN ('food_pool', 'daily_pool', 'growth_pool', 'pleasure_pool')),
+  motivation    TEXT NOT NULL CHECK (motivation IN ('need', 'entertainment', 'going_out')),
+  target_pool   TEXT NOT NULL CHECK (target_pool IN ('food_pool', 'daily_pool', 'growth_pool', 'entertainment_pool', 'going_out_pool')),
   tags          TEXT[] DEFAULT NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -141,14 +144,16 @@ CREATE POLICY "allow_all" ON financial_logs USING (true) WITH CHECK (true);
 
 -- 月次予算設定（ロールオーバー含む）
 CREATE TABLE IF NOT EXISTS budget_settings (
-  month            TEXT PRIMARY KEY,  -- '2026-06'
-  food_base        INTEGER NOT NULL DEFAULT 30000,
-  daily_base       INTEGER NOT NULL DEFAULT 10000,
-  pleasure_base    INTEGER NOT NULL DEFAULT 15000,
-  food_rollover    INTEGER NOT NULL DEFAULT 0,
-  daily_rollover   INTEGER NOT NULL DEFAULT 0,
-  pleasure_rollover INTEGER NOT NULL DEFAULT 0,
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  month                TEXT PRIMARY KEY,  -- '2026-06'
+  food_base            INTEGER NOT NULL DEFAULT 30000,
+  daily_base           INTEGER NOT NULL DEFAULT 10000,
+  entertainment_base   INTEGER NOT NULL DEFAULT 10000,
+  going_out_base       INTEGER NOT NULL DEFAULT 5000,
+  food_rollover        INTEGER NOT NULL DEFAULT 0,
+  daily_rollover       INTEGER NOT NULL DEFAULT 0,
+  entertainment_rollover INTEGER NOT NULL DEFAULT 0,
+  going_out_rollover   INTEGER NOT NULL DEFAULT 0,
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 ALTER TABLE budget_settings ENABLE ROW LEVEL SECURITY;

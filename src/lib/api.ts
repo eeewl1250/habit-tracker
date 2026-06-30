@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord, BaseCategory, Motivation } from '../types'
 import { CATEGORY_COLOR_PAIRS, resolveTargetPool } from '../types'
 
 // ── Tasks ──
@@ -443,16 +443,51 @@ export async function fetchFinanceRecords(dateFrom: string, dateTo: string): Pro
 }
 
 export async function createFinanceRecord(form: FinanceFormData): Promise<FinanceRecord> {
+  const insertData: Record<string, unknown> = {
+    amount: form.amount,
+    item_name: form.item_name,
+    base_category: form.base_category,
+    motivation: form.motivation,
+    target_pool: resolveTargetPool(form.base_category, form.motivation),
+    tags: form.tags || null,
+  }
+  if (form.created_at) {
+    insertData.created_at = form.created_at
+  }
   const { data, error } = await supabase
     .from('financial_logs')
-    .insert({
-      amount: form.amount,
-      item_name: form.item_name,
-      base_category: form.base_category,
-      motivation: form.motivation,
-      target_pool: resolveTargetPool(form.base_category, form.motivation),
-      tags: form.tags || null,
-    })
+    .insert(insertData)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateFinanceRecord(
+  id: string,
+  updates: Partial<FinanceFormData>
+): Promise<FinanceRecord> {
+  const updateData: Record<string, unknown> = {}
+  if (updates.amount !== undefined) updateData.amount = updates.amount
+  if (updates.item_name !== undefined) updateData.item_name = updates.item_name
+  if (updates.base_category !== undefined) updateData.base_category = updates.base_category
+  if (updates.motivation !== undefined) {
+    updateData.motivation = updates.motivation
+    const base = (updates.base_category ?? updateData.base_category) as BaseCategory | undefined
+    if (base) {
+      updateData.target_pool = resolveTargetPool(base, updates.motivation)
+    }
+  } else if (updates.base_category !== undefined) {
+    const mot = (updateData.motivation ?? 'need') as Motivation
+    updateData.target_pool = resolveTargetPool(updates.base_category, mot)
+  }
+  if (updates.tags !== undefined) updateData.tags = updates.tags
+  if (updates.created_at !== undefined) updateData.created_at = updates.created_at
+
+  const { data, error } = await supabase
+    .from('financial_logs')
+    .update(updateData)
+    .eq('id', id)
     .select()
     .single()
   if (error) throw error
