@@ -254,9 +254,10 @@ function SummaryModal({
   )
 }
 
-function Timeline({ logs, onEditSummary, onEditTimes, onDelete }: {
+function Timeline({ logs, onEditSummary, onEditCategory, onEditTimes, onDelete }: {
   logs: TimeLog[]
   onEditSummary: (id: string, summary: string) => void
+  onEditCategory: (id: string, category: string) => void
   onEditTimes: (id: string, start: string, end: string) => void
   onDelete: (id: string) => void
 }) {
@@ -276,6 +277,7 @@ function Timeline({ logs, onEditSummary, onEditTimes, onDelete }: {
           key={log.id}
           log={log}
           onEditSummary={onEditSummary}
+          onEditCategory={onEditCategory}
           onEditTimes={onEditTimes}
           onDelete={onDelete}
         />
@@ -284,9 +286,10 @@ function Timeline({ logs, onEditSummary, onEditTimes, onDelete }: {
   )
 }
 
-function TimelineItem({ log, onEditSummary, onEditTimes, onDelete }: {
+function TimelineItem({ log, onEditSummary, onEditCategory, onEditTimes, onDelete }: {
   log: TimeLog
   onEditSummary: (id: string, summary: string) => void
+  onEditCategory: (id: string, category: string) => void
   onEditTimes: (id: string, start: string, end: string) => void
   onDelete: (id: string) => void
 }) {
@@ -296,12 +299,16 @@ function TimelineItem({ log, onEditSummary, onEditTimes, onDelete }: {
   const duration = end ? differenceInMinutes(end, start) : 0
   const [editing, setEditing] = useState(false)
   const [editSummary, setEditSummary] = useState(log.summary ?? '')
+  const [editCategory, setEditCategory] = useState<TimeCategory>(cat)
   const [editStart, setEditStart] = useState(format(start, 'HH:mm'))
   const [editEnd, setEditEnd] = useState(end ? format(end, 'HH:mm') : '')
   const [editingTime, setEditingTime] = useState(false)
 
   const handleSave = () => {
     onEditSummary(log.id, editSummary)
+    if (editCategory !== cat) {
+      onEditCategory(log.id, editCategory)
+    }
     setEditing(false)
   }
 
@@ -339,13 +346,32 @@ function TimelineItem({ log, onEditSummary, onEditTimes, onDelete }: {
         </div>
 
         {editing ? (
-          <div className="mt-1 space-y-1">
+          <div className="mt-1 space-y-1.5">
             <textarea
               value={editSummary}
               onChange={e => setEditSummary(e.target.value)}
               className="w-full px-2 py-1 border border-gray-300 rounded text-xs resize-none h-14"
               placeholder="まとめを入力..."
             />
+            <div>
+              <div className="text-[10px] text-gray-400 mb-0.5">カテゴリ</div>
+              <div className="flex gap-1">
+                {(['job_hunting', 'self_growth'] as TimeCategory[]).map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setEditCategory(c)}
+                    className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${
+                      editCategory === c
+                        ? 'font-medium text-white border-transparent'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                    }`}
+                    style={editCategory === c ? { backgroundColor: COLORS[c] } : undefined}
+                  >
+                    {LABELS[c]}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-1">
               {!editingTime ? (
                 <>
@@ -574,6 +600,7 @@ export function FocusView({ timeLogs, baseDate, onGoToFinance }: FocusViewProps)
             <Timeline
               logs={timeLogs.logs}
               onEditSummary={timeLogs.editSummary}
+              onEditCategory={timeLogs.editCategory}
               onEditTimes={timeLogs.editTimes}
               onDelete={timeLogs.remove}
             />

@@ -8,6 +8,14 @@ body {
   margin: 0;
 }
 
+/* nested list markers */
+.markdown-preview ul ul { list-style-type: circle; }
+.markdown-preview ul ul ul { list-style-type: square; }
+.markdown-preview ol ol { list-style-type: lower-alpha; }
+.markdown-preview ol ol ol { list-style-type: lower-roman; }
+
+.markdown-preview blockquote { margin-inline-start: 0; margin-inline-end: 0; }
+
 @keyframes confetti-fall {
   0% {
     transform: translateY(0) rotate(0deg);

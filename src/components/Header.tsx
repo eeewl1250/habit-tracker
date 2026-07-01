@@ -20,6 +20,7 @@ const modes: { key: ViewMode; label: string }[] = [
   { key: 'month', label: '月' },
   { key: 'focus', label: '集中' },
   { key: 'finance', label: '家計簿' },
+  { key: 'diary', label: '日記' },
   { key: 'heatmap', label: '🔥' },
   { key: 'stats', label: '統計' },
   { key: 'notes', label: 'メモ' },

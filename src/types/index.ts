@@ -1,6 +1,6 @@
 export type PeriodType = 'frequency' | 'weekday'
 export type TaskStatus = 'active' | 'disabled'
-export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep' | 'focus' | 'finance'
+export type ViewMode = 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep' | 'focus' | 'finance' | 'diary'
 
 export type TimeCategory = 'job_hunting' | 'self_growth'
 
@@ -243,4 +243,16 @@ export interface MonthlyRecurringRecord {
   month: string
   amount: number
   created_at?: string
+}
+
+// ── Diary ──
+
+export interface DiaryEntry {
+  id: string
+  date: string
+  original_text: string
+  corrected_text: string | null
+  ai_advice: string | null
+  created_at: string
+  updated_at: string
 }

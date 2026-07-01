@@ -11,6 +11,7 @@ import { CravingView } from './components/CravingView'
 import { SleepView } from './components/SleepView'
 import { FocusView } from './components/FocusView'
 import { FinanceView } from './components/FinanceView'
+import { DiaryView } from './components/DiaryView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -25,8 +26,10 @@ import { useTimeLogs } from './hooks/useTimeLogs'
 import { useFinance } from './hooks/useFinance'
 import { useBudget } from './hooks/useBudget'
 import { useRecurring } from './hooks/useRecurring'
+import { useDiary } from './hooks/useDiary'
 import { fetchCategories } from './lib/api'
 import type { Category, ViewMode, TargetPool } from './types'
+import type { DiarySubMode } from './components/DiaryView'
 
 function App() {
   const tasks = useTasks()
@@ -39,10 +42,12 @@ function App() {
   const finance = useFinance()
   const budget = useBudget()
   const recurring = useRecurring()
+  const diary = useDiary()
 
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
+  const [diarySubMode, setDiarySubMode] = useState<DiarySubMode>('calendar')
   
   const categoryColor = useMemo(() => {
     const map = new Map<string, string>()
@@ -95,6 +100,7 @@ function App() {
   const isSleep = dates.viewMode === 'sleep'
   const isFocus = dates.viewMode === 'focus'
   const isFinance = dates.viewMode === 'finance'
+  const isDiary = dates.viewMode === 'diary'
 
   const focusDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
   useEffect(() => {
@@ -129,6 +135,14 @@ function App() {
     if (isFinance) budget.load(dashboardMonthStr)
   }, [isFinance, budget.load, dashboardMonthStr])
 
+  // Load diary entries on mount (wide range)
+  useEffect(() => {
+    diary.load(
+      format(subDays(new Date(), 365), 'yyyy-MM-dd'),
+      format(addDays(new Date(), 365), 'yyyy-MM-dd'),
+    )
+  }, [diary.load])
+
   // Load recurring templates on mount
   useEffect(() => {
     recurring.loadTemplates()
@@ -141,7 +155,7 @@ function App() {
     }
   }, [isFinance, dashboardMonthStr, recurring.templates.length, recurring.ensureMonthlyRecords])
 
-  const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
+  const showMatrix = (dates.viewMode === 'week' || dates.viewMode === 'month') && !isDiary
 
   const refreshCategories = useCallback(() => {
     fetchCategories().then(setCategories).catch(() => {})
@@ -170,20 +184,22 @@ function App() {
 
   return (
     <div className={`min-h-screen transition-colors ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
-      <Header
-        rangeLabel={dates.rangeLabel}
-        viewMode={dates.viewMode}
-        onPrev={dates.goPrev}
-        onNext={dates.goNext}
-        onToday={dates.goToday}
-        onViewModeChange={handleViewModeChange}
-        managing={showManagement}
-        onManage={handleManage}
-        hideDateNav={dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance}
-        dark={isDark}
-      />
+      {(!isDiary || diarySubMode === 'calendar') && (
+        <Header
+          rangeLabel={dates.rangeLabel}
+          viewMode={dates.viewMode}
+          onPrev={dates.goPrev}
+          onNext={dates.goNext}
+          onToday={dates.goToday}
+          onViewModeChange={handleViewModeChange}
+          managing={showManagement}
+          onManage={handleManage}
+          hideDateNav={dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary}
+          dark={isDark}
+        />
+      )}
 
-      <main className={`transition-colors ${isDark ? '' : 'max-w-5xl mx-auto pb-24'}`}>
+      <main className={`transition-colors ${isDiary ? 'w-full' : isDark ? '' : 'max-w-5xl mx-auto pb-24'}`}>
         {showManagement ? (
           <ManagementPage
             tasks={tasks.tasks}
@@ -220,6 +236,13 @@ function App() {
             onEditRecurringTemplate={recurring.editTemplate}
             onDeleteRecurringTemplate={recurring.removeTemplate}
             onUpdateRecurringRecord={recurring.updateMonthlyRecord}
+          />
+        ) : isDiary ? (
+          <DiaryView
+            entries={diary.entries}
+            onSave={diary.save}
+            onUpdate={diary.update}
+            onModeChange={setDiarySubMode}
           />
         ) : isSleep ? (
           <SleepView
@@ -300,7 +323,7 @@ function App() {
         )}
       </main>
 
-      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && (
+      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -309,7 +332,7 @@ function App() {
         </button>
       )}
 
-      {dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && (
+      {dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && (
         <>
           <Toast
             key={toast.key}

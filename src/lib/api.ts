@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord, BaseCategory, Motivation } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord, DiaryEntry, BaseCategory, Motivation } from '../types'
 import { CATEGORY_COLOR_PAIRS, resolveTargetPool } from '../types'
 
 // ── Tasks ──
@@ -592,6 +592,43 @@ export async function upsertMonthlyRecurringRecord(
   const { data, error } = await supabase
     .from('monthly_recurring_records')
     .upsert({ template_id: templateId, month, amount }, { onConflict: 'template_id,month' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ── Diary ──
+
+export async function fetchDiaryEntries(dateFrom: string, dateTo: string): Promise<DiaryEntry[]> {
+  const { data, error } = await supabase
+    .from('diary_entries')
+    .select('*')
+    .gte('date', dateFrom)
+    .lte('date', dateTo)
+    .order('date', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createDiaryEntry(date: string, originalText: string): Promise<DiaryEntry> {
+  const { data, error } = await supabase
+    .from('diary_entries')
+    .insert({ date, original_text: originalText })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateDiaryEntry(
+  date: string,
+  updates: { original_text?: string; corrected_text?: string | null; ai_advice?: string | null },
+): Promise<DiaryEntry> {
+  const { data, error } = await supabase
+    .from('diary_entries')
+    .update(updates)
+    .eq('date', date)
     .select()
     .single()
   if (error) throw error

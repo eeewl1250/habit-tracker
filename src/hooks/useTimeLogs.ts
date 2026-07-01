@@ -71,6 +71,15 @@ export function useTimeLogs() {
     }
   }, [])
 
+  const editCategory = useCallback(async (id: string, category: string) => {
+    try {
+      const updated = await updateTimeLog(id, { category })
+      setLogs((prev) => prev.map((l) => (l.id === id ? updated : l)))
+    } catch {
+      // silent
+    }
+  }, [])
+
   const editTimes = useCallback(async (id: string, startTime: string, endTime: string) => {
     try {
       const updated = await updateTimeLog(id, { start_time: startTime, end_time: endTime })
@@ -100,6 +109,7 @@ export function useTimeLogs() {
     stopTimer,
     addManual,
     editSummary,
+    editCategory,
     editTimes,
     remove,
     getActiveTimer,

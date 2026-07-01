@@ -185,3 +185,23 @@ CREATE TABLE IF NOT EXISTS monthly_recurring_records (
 CREATE INDEX IF NOT EXISTS idx_monthly_recurring_month ON monthly_recurring_records(month);
 ALTER TABLE monthly_recurring_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all" ON monthly_recurring_records USING (true) WITH CHECK (true);
+
+-- 日記エントリ
+CREATE TABLE IF NOT EXISTS diary_entries (
+  id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  date            DATE NOT NULL UNIQUE,
+  original_text   TEXT NOT NULL DEFAULT '',
+  corrected_text  TEXT,
+  ai_advice       TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_diary_entries_date ON diary_entries(date);
+
+ALTER TABLE diary_entries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all" ON diary_entries USING (true) WITH CHECK (true);
+
+CREATE TRIGGER diary_entries_updated_at
+  BEFORE UPDATE ON diary_entries
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
