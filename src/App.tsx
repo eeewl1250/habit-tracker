@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { format, subDays, addDays } from 'date-fns'
+import { format, subDays, addDays, startOfMonth } from 'date-fns'
 import { Header } from './components/Header'
 import { MatrixView } from './components/MatrixView'
 import { MobileView } from './components/MobileView'
@@ -26,7 +26,7 @@ import { useFinance } from './hooks/useFinance'
 import { useBudget } from './hooks/useBudget'
 import { useRecurring } from './hooks/useRecurring'
 import { fetchCategories } from './lib/api'
-import type { Category, ViewMode } from './types'
+import type { Category, ViewMode, TargetPool } from './types'
 
 function App() {
   const tasks = useTasks()
@@ -104,17 +104,30 @@ function App() {
     )
   }, [focusDateRangeStr, timeLogs.load])
 
-  const financeMonthStr = format(new Date(), 'yyyy-MM')
+  const [dashboardMonth, setDashboardMonth] = useState(startOfMonth(new Date()))
+  const dashboardMonthStr = format(dashboardMonth, 'yyyy-MM')
+
+  const handleDashboardMonthChange = useCallback((month: Date) => {
+    setDashboardMonth(month)
+  }, [])
+
+  const handleRecalculateRollover = useCallback(
+    (month: string, poolTotals: Record<TargetPool, number>, prevTimeBonus?: number) => {
+      budget.recalculateRollover(month, poolTotals, prevTimeBonus)
+    },
+    [budget.recalculateRollover]
+  )
+
   useEffect(() => {
     finance.load(
       format(subDays(new Date(), 180), 'yyyy-MM-dd'),
       format(addDays(new Date(), 31), 'yyyy-MM-dd')
     )
-  }, [finance.load, financeMonthStr])
+  }, [finance.load])
 
   useEffect(() => {
-    if (isFinance) budget.load(financeMonthStr)
-  }, [isFinance, budget.load, financeMonthStr])
+    if (isFinance) budget.load(dashboardMonthStr)
+  }, [isFinance, budget.load, dashboardMonthStr])
 
   // Load recurring templates on mount
   useEffect(() => {
@@ -124,9 +137,9 @@ function App() {
   // Ensure monthly recurring records exist for the current month
   useEffect(() => {
     if (isFinance && recurring.templates.length > 0) {
-      recurring.ensureMonthlyRecords(financeMonthStr)
+      recurring.ensureMonthlyRecords(dashboardMonthStr)
     }
-  }, [isFinance, financeMonthStr, recurring.templates.length, recurring.ensureMonthlyRecords])
+  }, [isFinance, dashboardMonthStr, recurring.templates.length, recurring.ensureMonthlyRecords])
 
   const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
 
@@ -190,7 +203,9 @@ function App() {
           <FinanceView
             records={finance.records}
             timeLogs={timeLogs.logs}
-            budget={budget.getSettings(financeMonthStr)}
+            budget={budget.getSettings(dashboardMonthStr)}
+            dashboardMonth={dashboardMonth}
+            onDashboardMonthChange={handleDashboardMonthChange}
             recurringTemplates={recurring.templates}
             recurringRecords={recurring.monthlyRecords}
             recurringIncome={recurring.totalIncome}
@@ -199,7 +214,8 @@ function App() {
             onAdd={finance.add}
             onUpdate={finance.update}
             onDelete={finance.remove}
-            onUpdateBase={(field, value) => budget.updateBase(financeMonthStr, field, value)}
+            onUpdateBase={(field, value) => budget.updateBase(dashboardMonthStr, field, value)}
+            onRecalculateRollover={handleRecalculateRollover}
             onAddRecurringTemplate={recurring.addTemplate}
             onEditRecurringTemplate={recurring.editTemplate}
             onDeleteRecurringTemplate={recurring.removeTemplate}

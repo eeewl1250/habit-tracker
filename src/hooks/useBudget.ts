@@ -32,12 +32,14 @@ export function useBudget() {
 
       for (const m of months) {
         if (!map[m]) {
+          const src = months.find((om) => om !== m && map[om])
+          const srcSettings = src ? map[src] : null
           const defaults: BudgetSettings = {
             month: m,
-            food_base: DEFAULT_BUDGET_BASES.food,
-            daily_base: DEFAULT_BUDGET_BASES.daily,
-            entertainment_base: DEFAULT_BUDGET_BASES.entertainment,
-            going_out_base: DEFAULT_BUDGET_BASES.going_out,
+            food_base: srcSettings?.food_base ?? DEFAULT_BUDGET_BASES.food,
+            daily_base: srcSettings?.daily_base ?? DEFAULT_BUDGET_BASES.daily,
+            entertainment_base: srcSettings?.entertainment_base ?? DEFAULT_BUDGET_BASES.entertainment,
+            going_out_base: srcSettings?.going_out_base ?? DEFAULT_BUDGET_BASES.going_out,
             food_rollover: 0,
             daily_rollover: 0,
             entertainment_rollover: 0,
@@ -69,6 +71,7 @@ export function useBudget() {
   const recalculateRollover = useCallback(async (
     month: string,
     poolTotals: Record<TargetPool, number>,
+    prevTimeBonus?: number,
   ) => {
     try {
       const cur = settings[month]
@@ -84,15 +87,13 @@ export function useBudget() {
 
       const foodBudget = cur.food_base + cur.food_rollover
       const dailyBudget = cur.daily_base + cur.daily_rollover
-      const entertainmentBudget = cur.entertainment_base + cur.entertainment_rollover
+      const entertainmentBudget = cur.entertainment_base + cur.entertainment_rollover + (prevTimeBonus ?? 0)
       const goingOutBudget = cur.going_out_base + cur.going_out_rollover
 
       const foodRemaining = foodBudget - monthlySpend.food_pool
       const dailyRemaining = dailyBudget - monthlySpend.daily_pool
-      let entertainmentRemaining = entertainmentBudget - monthlySpend.entertainment_pool
-      if (entertainmentRemaining < 0) entertainmentRemaining = 0
-      let goingOutRemaining = goingOutBudget - monthlySpend.going_out_pool
-      if (goingOutRemaining < 0) goingOutRemaining = 0
+      const entertainmentRemaining = entertainmentBudget - monthlySpend.entertainment_pool
+      const goingOutRemaining = goingOutBudget - monthlySpend.going_out_pool
 
       const nextMonth = prevMonth(month) === month ? '' : (() => {
         const [y, m] = month.split('-').map(Number)

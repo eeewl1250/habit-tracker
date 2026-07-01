@@ -1,5 +1,6 @@
-﻿import { useState, useMemo, useEffect } from 'react'
+﻿import { useState, useMemo, useEffect, useRef } from 'react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
+import stampImg from '../images/stamp.png'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import type { FinanceRecord, BaseCategory, Motivation, TargetPool, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord } from '../types'
@@ -9,6 +10,8 @@ interface FinanceViewProps {
   records: FinanceRecord[]
   timeLogs: { duration: number | null; category: string; start_time: string }[]
   budget: BudgetSettings | undefined
+  dashboardMonth: Date
+  onDashboardMonthChange: (month: Date) => void
   recurringTemplates: RecurringTemplate[]
   recurringRecords: MonthlyRecurringRecord[]
   recurringIncome: number
@@ -32,6 +35,7 @@ interface FinanceViewProps {
   }>) => void
   onDelete: (id: string) => void
   onUpdateBase: (field: 'food_base' | 'daily_base' | 'entertainment_base' | 'going_out_base', value: number) => void
+  onRecalculateRollover: (month: string, poolTotals: Record<TargetPool, number>, prevTimeBonus?: number) => void
   onAddRecurringTemplate: (type: 'income' | 'expense', name: string, amount: number) => void
   onEditRecurringTemplate: (id: string, updates: { item_name?: string; default_amount?: number }) => void
   onDeleteRecurringTemplate: (id: string) => void
@@ -564,8 +568,8 @@ function BudgetDashboard({
 }) {
   const [editing, setEditing] = useState(false)
   const pools = useMemo(() => {
-    const foodBudget = budget.food_base + budget.food_rollover
-    const dailyBudget = budget.daily_base + budget.daily_rollover
+    const foodBudget = budget.food_base + (budget.food_rollover ?? 0)
+    const dailyBudget = budget.daily_base + (budget.daily_rollover ?? 0)
     const entertainmentBudget = (budget.entertainment_base ?? 10000) + (budget.entertainment_rollover ?? 0) + timeBonus
     const goingOutBudget = (budget.going_out_base ?? 5000) + (budget.going_out_rollover ?? 0)
 
@@ -579,10 +583,12 @@ function BudgetDashboard({
         budget: foodBudget,
         spent: poolTotals.food_pool,
         base: budget.food_base,
-        rollover: budget.food_rollover,
+        rollover: budget.food_rollover ?? 0,
         bonus: null as number | null,
         baseField: 'food_base' as const,
-        rolloverLabel: budget.food_rollover >= 0 ? `+¥${budget.food_rollover.toLocaleString()}` : `-¥${Math.abs(budget.food_rollover).toLocaleString()}`,
+        rolloverLabel: (budget.food_rollover ?? 0) >= 0
+          ? `+¥${(budget.food_rollover ?? 0).toLocaleString()}`
+          : `-¥${Math.abs(budget.food_rollover ?? 0).toLocaleString()}`,
       },
       {
         key: 'daily_pool' as TargetPool,
@@ -593,10 +599,12 @@ function BudgetDashboard({
         budget: dailyBudget,
         spent: poolTotals.daily_pool,
         base: budget.daily_base,
-        rollover: budget.daily_rollover,
+        rollover: budget.daily_rollover ?? 0,
         bonus: null as number | null,
         baseField: 'daily_base' as const,
-        rolloverLabel: budget.daily_rollover >= 0 ? `+¥${budget.daily_rollover.toLocaleString()}` : `-¥${Math.abs(budget.daily_rollover).toLocaleString()}`,
+        rolloverLabel: (budget.daily_rollover ?? 0) >= 0
+          ? `+¥${(budget.daily_rollover ?? 0).toLocaleString()}`
+          : `-¥${Math.abs(budget.daily_rollover ?? 0).toLocaleString()}`,
       },
       {
         key: 'growth_pool' as TargetPool,
@@ -624,7 +632,9 @@ function BudgetDashboard({
         rollover: budget.entertainment_rollover ?? 0,
         bonus: timeBonus,
         baseField: 'entertainment_base' as const,
-        rolloverLabel: (budget.entertainment_rollover ?? 0) >= 0 ? `+¥${(budget.entertainment_rollover ?? 0).toLocaleString()}` : null,
+        rolloverLabel: (budget.entertainment_rollover ?? 0) >= 0
+          ? `+¥${(budget.entertainment_rollover ?? 0).toLocaleString()}`
+          : `-¥${Math.abs(budget.entertainment_rollover ?? 0).toLocaleString()}`,
       },
       {
         key: 'going_out_pool' as TargetPool,
@@ -638,7 +648,9 @@ function BudgetDashboard({
         rollover: budget.going_out_rollover ?? 0,
         bonus: null as number | null,
         baseField: 'going_out_base' as const,
-        rolloverLabel: (budget.going_out_rollover ?? 0) >= 0 ? `+¥${(budget.going_out_rollover ?? 0).toLocaleString()}` : null,
+        rolloverLabel: (budget.going_out_rollover ?? 0) >= 0
+          ? `+¥${(budget.going_out_rollover ?? 0).toLocaleString()}`
+          : `-¥${Math.abs(budget.going_out_rollover ?? 0).toLocaleString()}`,
       },
     ]
 
@@ -744,7 +756,7 @@ function BudgetDashboard({
                   }
                 </span>
                 {pool.rollover !== null && pool.rollover !== 0 && (
-                  <span>🔄 前月繰越: {pool.rolloverLabel}</span>
+                  <span className={pool.rollover < 0 ? 'text-red-500 font-medium' : ''}>🔄 前月繰越: {pool.rolloverLabel}</span>
                 )}
                 {pool.bonus !== null && pool.bonus > 0 && (
                   <span title={`${focusMinutes}分の就活時間 × ¥${TIME_BONUS_RATE}/h = +¥${pool.bonus.toLocaleString()}`}>🎮 集中ボーナス: +¥{pool.bonus.toLocaleString()}</span>
@@ -810,11 +822,10 @@ function TagHeatmap({ records }: { records: FinanceRecord[] }) {
   )
 }
 
-function TimeMoneyChart({ records, timeLogs }: { records: FinanceRecord[]; timeLogs: FinanceViewProps['timeLogs'] }) {
-  const now = new Date()
-  const monthStart = startOfMonth(now)
-  const monthEnd = endOfMonth(now)
-  const monthStr = format(now, 'yyyy-MM')
+function TimeMoneyChart({ records, timeLogs, yearMonth }: { records: FinanceRecord[]; timeLogs: FinanceViewProps['timeLogs']; yearMonth: Date }) {
+  const monthStart = startOfMonth(yearMonth)
+  const monthEnd = endOfMonth(yearMonth)
+  const monthStr = format(yearMonth, 'yyyy-MM')
 
   const dailyData = useMemo(() => {
     const days: { date: string; label: string; bonus: number; spent: number }[] = []
@@ -891,13 +902,11 @@ function TimeMoneyChart({ records, timeLogs }: { records: FinanceRecord[]; timeL
 }
 
 function MonthlyCalendar({
-  yearMonth, records, onPrev, onNext, onToday, onEdit, onDelete,
+  yearMonth, records, overspentPools, onEdit, onDelete,
 }: {
   yearMonth: Date
   records: FinanceRecord[]
-  onPrev: () => void
-  onNext: () => void
-  onToday: () => void
+  overspentPools: Set<TargetPool>
   onEdit: (record: FinanceRecord) => void
   onDelete: (id: string) => void
 }) {
@@ -919,6 +928,16 @@ function MonthlyCalendar({
     return map
   }, [records])
 
+  const daysWithGoingOut = useMemo(() => {
+    const set = new Set<number>()
+    for (const r of records) {
+      if (r.tags?.includes('外食')) {
+        set.add(new Date(r.created_at).getDate())
+      }
+    }
+    return set
+  }, [records])
+
   const dayRecords = selectedDay ? (recordsByDay.get(selectedDay) ?? []) : []
 
   const dayTotal = (day: number) => {
@@ -929,16 +948,9 @@ function MonthlyCalendar({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📅</span>
-          <span className="font-bold text-gray-800 text-sm">{monthLabel}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={onPrev} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">&lt;</button>
-          <button onClick={onToday} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">今日</button>
-          <button onClick={onNext} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">&gt;</button>
-        </div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">📅</span>
+        <span className="font-bold text-gray-800 text-sm">{monthLabel}</span>
       </div>
 
       <div className="grid grid-cols-7 mb-1">
@@ -963,7 +975,7 @@ function MonthlyCalendar({
             <button
               key={day}
               onClick={() => setSelectedDay(isSelected ? null : day)}
-              className={`bg-white p-1 text-left transition-colors hover:bg-gray-50 min-h-14 ${isSelected ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isToday ? 'bg-blue-50' : ''}`}
+              className={`relative bg-white p-1 text-left transition-colors hover:bg-gray-50 min-h-14 overflow-hidden ${isSelected ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isToday ? 'bg-blue-50' : ''}`}
             >
               <span className={`inline-flex items-center justify-center w-4 h-4 text-[10px] font-medium leading-tight ${colIdx === 6 ? 'text-red-400' : colIdx === 5 ? 'text-blue-400' : 'text-gray-500'} ${isToday ? 'bg-blue-600 text-white rounded-full' : ''}`}>
                 {day}
@@ -971,6 +983,11 @@ function MonthlyCalendar({
               {hasRecords && (
                 <div className="text-[9px] font-bold text-gray-700 truncate leading-tight mt-0.5">
                   ¥{total.toLocaleString()}
+                </div>
+              )}
+              {daysWithGoingOut.has(day) && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <img src={stampImg} alt="外食" className="w-[85%] h-[85%] object-contain opacity-50" style={{ transform: 'rotate(30deg)' }} />
                 </div>
               )}
             </button>
@@ -1001,7 +1018,7 @@ function MonthlyCalendar({
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      <span className={`text-xs font-bold ${r.motivation === 'entertainment' ? 'text-pink-500' : r.motivation === 'going_out' ? 'text-orange-500' : 'text-gray-700'}`}>
+                      <span className={`text-xs font-bold ${overspentPools.has(r.target_pool) ? 'text-red-500' : r.motivation === 'entertainment' ? 'text-pink-500' : r.motivation === 'going_out' ? 'text-orange-500' : 'text-gray-700'}`}>
                         ¥{r.amount.toLocaleString()}
                       </span>
                       <button onClick={() => onEdit(r)} className="text-gray-200 hover:text-blue-500 text-[10px] opacity-0 group-hover:opacity-100">✏️</button>
@@ -1020,24 +1037,26 @@ function MonthlyCalendar({
 
 export function FinanceView({
   records, timeLogs, budget,
+  dashboardMonth, onDashboardMonthChange,
   recurringTemplates, recurringRecords, recurringIncome, recurringExpense, recurringNet,
   onAdd, onUpdate, onDelete, onUpdateBase,
+  onRecalculateRollover,
   onAddRecurringTemplate, onEditRecurringTemplate, onDeleteRecurringTemplate, onUpdateRecurringRecord,
 }: FinanceViewProps) {
   const [showRecurring, setShowRecurring] = useState(false)
   const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null)
-  const [calendarMonth, setCalendarMonth] = useState(startOfMonth(new Date()))
-  const now = new Date()
-  const monthStr = format(now, 'yyyy-MM')
+  const monthStr = format(dashboardMonth, 'yyyy-MM')
+  const prevMonthStr = format(subMonths(dashboardMonth, 1), 'yyyy-MM')
+  const rolloverCalculatedRef = useRef<string | null>(null)
 
   const monthlyRecords = useMemo(
     () => records.filter((r) => r.created_at.startsWith(monthStr)),
     [records, monthStr]
   )
 
-  const calendarRecords = useMemo(
-    () => records.filter((r) => r.created_at.startsWith(format(calendarMonth, 'yyyy-MM'))),
-    [records, calendarMonth]
+  const prevMonthRecords = useMemo(
+    () => records.filter((r) => r.created_at.startsWith(prevMonthStr)),
+    [records, prevMonthStr]
   )
 
   const poolTotals = useMemo(() => {
@@ -1047,6 +1066,14 @@ export function FinanceView({
     }
     return map
   }, [monthlyRecords])
+
+  const prevMonthPoolTotals = useMemo(() => {
+    const map: Record<TargetPool, number> = { food_pool: 0, daily_pool: 0, growth_pool: 0, entertainment_pool: 0, going_out_pool: 0 }
+    for (const r of prevMonthRecords) {
+      map[r.target_pool] += r.amount
+    }
+    return map
+  }, [prevMonthRecords])
 
   const monthlyJobMinutes = useMemo(() => {
     let total = 0
@@ -1060,25 +1087,65 @@ export function FinanceView({
 
   const timeBonus = Math.floor((monthlyJobMinutes / 60) * TIME_BONUS_RATE)
 
-  const monthLabel = format(now, 'yyyy年 M月', { locale: ja })
-  const handlePrevMonth = () => setCalendarMonth((prev) => subMonths(prev, 1))
-  const handleNextMonth = () => setCalendarMonth((prev) => addMonths(prev, 1))
-  const handleTodayMonth = () => setCalendarMonth(startOfMonth(new Date()))
+  const prevMonthJobMinutes = useMemo(() => {
+    let total = 0
+    for (const tl of timeLogs) {
+      if (tl.category === 'job_hunting' && tl.duration && tl.start_time.startsWith(prevMonthStr)) {
+        total += tl.duration
+      }
+    }
+    return total
+  }, [timeLogs, prevMonthStr])
+
+  const prevMonthTimeBonus = Math.floor((prevMonthJobMinutes / 60) * TIME_BONUS_RATE)
+
+  useEffect(() => {
+    if (!budget) return
+    const key = `${monthStr}-${prevMonthStr}`
+    if (rolloverCalculatedRef.current === key) return
+    rolloverCalculatedRef.current = key
+    onRecalculateRollover(prevMonthStr, prevMonthPoolTotals, prevMonthTimeBonus)
+  }, [budget, dashboardMonth, onRecalculateRollover, prevMonthStr, monthStr, prevMonthPoolTotals, prevMonthTimeBonus])
+
+  const overspentPools = useMemo(() => {
+    if (!budget) return new Set<TargetPool>()
+    const set = new Set<TargetPool>()
+    if ((budget.food_rollover ?? 0) < 0) set.add('food_pool')
+    if ((budget.daily_rollover ?? 0) < 0) set.add('daily_pool')
+    if ((budget.entertainment_rollover ?? 0) < 0) set.add('entertainment_pool')
+    if ((budget.going_out_rollover ?? 0) < 0) set.add('going_out_pool')
+    return set
+  }, [budget])
+
+  const monthLabel = format(dashboardMonth, 'yyyy年 M月', { locale: ja })
+
+  const handlePrevDashboardMonth = () => onDashboardMonthChange(subMonths(dashboardMonth, 1))
+  const handleNextDashboardMonth = () => onDashboardMonthChange(addMonths(dashboardMonth, 1))
+  const handleTodayDashboardMonth = () => onDashboardMonthChange(startOfMonth(new Date()))
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">💰 家計簿</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-gray-800">💰 家計簿</h2>
+        <div className="flex items-center gap-1">
+          <button onClick={handlePrevDashboardMonth}
+            className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">&lt;</button>
+          <span className="text-xs text-gray-400 mx-1 min-w-[7rem] text-center">{monthLabel}</span>
+          <button onClick={handleNextDashboardMonth}
+            className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">&gt;</button>
+          <button onClick={handleTodayDashboardMonth}
+            className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded ml-1">今日</button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-4">
           <QuickExpense onAdd={onAdd} records={records} />
 
           <MonthlyCalendar
-            yearMonth={calendarMonth}
-            records={calendarRecords}
-            onPrev={handlePrevMonth}
-            onNext={handleNextMonth}
-            onToday={handleTodayMonth}
+            yearMonth={dashboardMonth}
+            records={monthlyRecords}
+            overspentPools={overspentPools}
             onEdit={(record) => setEditingRecord(record)}
             onDelete={onDelete}
           />
@@ -1107,7 +1174,7 @@ export function FinanceView({
           )}
 
           <TagHeatmap records={monthlyRecords} />
-          <TimeMoneyChart records={monthlyRecords} timeLogs={timeLogs} />
+          <TimeMoneyChart records={monthlyRecords} timeLogs={timeLogs} yearMonth={dashboardMonth} />
         </div>
       </div>
 
