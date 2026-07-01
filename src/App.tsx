@@ -12,6 +12,7 @@ import { SleepView } from './components/SleepView'
 import { FocusView } from './components/FocusView'
 import { FinanceView } from './components/FinanceView'
 import { DiaryView } from './components/DiaryView'
+import { HomeView } from './components/HomeView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -96,6 +97,7 @@ function App() {
     loadSleepLogs()
   }, [loadSleepLogs])
 
+  const isHome = dates.viewMode === 'home'
   const isCraving = dates.viewMode === 'craving'
   const isSleep = dates.viewMode === 'sleep'
   const isFocus = dates.viewMode === 'focus'
@@ -155,7 +157,7 @@ function App() {
     }
   }, [isFinance, dashboardMonthStr, recurring.templates.length, recurring.ensureMonthlyRecords])
 
-  const showMatrix = (dates.viewMode === 'week' || dates.viewMode === 'month') && !isDiary
+  const showMatrix = (dates.viewMode === 'week' || dates.viewMode === 'month') && !isDiary && !isHome
 
   const refreshCategories = useCallback(() => {
     fetchCategories().then(setCategories).catch(() => {})
@@ -180,7 +182,7 @@ function App() {
     toast.close()
   }, [toast, noteFlow])
 
-  const isDark = isCraving || isSleep
+  const isDark = (isCraving || isSleep) && !isHome
 
   return (
     <div className={`min-h-screen transition-colors ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
@@ -194,22 +196,32 @@ function App() {
           onViewModeChange={handleViewModeChange}
           managing={showManagement}
           onManage={handleManage}
-          hideDateNav={dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary}
+          hideDateNav={isHome || dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary}
           dark={isDark}
         />
       )}
 
-      <main className={`transition-colors ${isDiary ? 'w-full' : isDark ? '' : 'max-w-5xl mx-auto pb-24'}`}>
-        {showManagement ? (
-          <ManagementPage
-            tasks={tasks.tasks}
-            categories={categories}
-            onAdd={(form) => tasks.add(form)}
-            onEdit={(id, form) => tasks.edit(id, form)}
-            onDelete={(id) => tasks.remove(id)}
-            onRefresh={handleRefresh}
-          />
-        ) : isCraving ? (
+      {isHome ? (
+        <HomeView
+          tasks={tasks.tasks}
+          logs={logs.logs}
+          sleepLogs={sleepLogs.logs}
+          timeLogs={timeLogs.logs}
+          diaryEntries={diary.entries}
+          onNavigate={handleViewModeChange}
+        />
+      ) : (
+        <main className={`transition-colors ${isDiary ? 'w-full' : isDark ? '' : 'max-w-5xl mx-auto pb-24'}`}>
+          {showManagement ? (
+            <ManagementPage
+              tasks={tasks.tasks}
+              categories={categories}
+              onAdd={(form) => tasks.add(form)}
+              onEdit={(id, form) => tasks.edit(id, form)}
+              onDelete={(id) => tasks.remove(id)}
+              onRefresh={handleRefresh}
+            />
+          ) : isCraving ? (
           <CravingView />
         ) : dates.viewMode === 'menstruation' ? (
           <MenstruationView />
@@ -322,8 +334,9 @@ function App() {
           </>
         )}
       </main>
+      )}
 
-      {!showManagement && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && (
+      {!showManagement && !isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -332,7 +345,7 @@ function App() {
         </button>
       )}
 
-      {dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && (
+      {!isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && (
         <>
           <Toast
             key={toast.key}

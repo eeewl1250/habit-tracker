@@ -15,10 +15,11 @@ import { ja } from 'date-fns/locale'
 import type { ViewMode } from '../types'
 
 export function useViewDates() {
-  const [viewMode, setViewMode] = useState<ViewMode>('week')
+  const [viewMode, setViewMode] = useState<ViewMode>('home')
   const [baseDate, setBaseDate] = useState(new Date())
 
   const dateRange = useMemo(() => {
+    if (viewMode === 'home') return { start: baseDate, end: baseDate }
     if (viewMode === 'week' || viewMode === 'heatmap' || viewMode === 'stats') {
       const start = startOfWeek(baseDate, { weekStartsOn: 1 })
       const end = endOfWeek(baseDate, { weekStartsOn: 1 })
@@ -30,17 +31,18 @@ export function useViewDates() {
   }, [viewMode, baseDate])
 
   const days = useMemo(() => {
+    if (viewMode === 'home') return [baseDate]
     return eachDayOfInterval({ start: dateRange.start, end: dateRange.end })
-  }, [dateRange])
+  }, [viewMode, dateRange, baseDate])
 
   const goPrev = useCallback(() => {
     if (viewMode === 'week') setBaseDate((d) => subWeeks(d, 1))
-    else setBaseDate((d) => subMonths(d, 1))
+    else if (viewMode !== 'home') setBaseDate((d) => subMonths(d, 1))
   }, [viewMode])
 
   const goNext = useCallback(() => {
     if (viewMode === 'week') setBaseDate((d) => addWeeks(d, 1))
-    else setBaseDate((d) => addMonths(d, 1))
+    else if (viewMode !== 'home') setBaseDate((d) => addMonths(d, 1))
   }, [viewMode])
 
   const goToday = useCallback(() => {
@@ -48,6 +50,7 @@ export function useViewDates() {
   }, [])
 
   const rangeLabel = useMemo(() => {
+    if (viewMode === 'home') return ''
     if (viewMode === 'week') {
       return `${format(dateRange.start, 'M月d日', { locale: ja })} - ${format(dateRange.end, 'M月d日', { locale: ja })}`
     }

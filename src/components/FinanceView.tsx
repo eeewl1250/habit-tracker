@@ -759,7 +759,7 @@ function BudgetDashboard({
                   <span className={pool.rollover < 0 ? 'text-red-500 font-medium' : ''}>🔄 前月繰越: {pool.rolloverLabel}</span>
                 )}
                 {pool.bonus !== null && pool.bonus > 0 && (
-                  <span title={`${focusMinutes}分の就活時間 × ¥${TIME_BONUS_RATE}/h = +¥${pool.bonus.toLocaleString()}`}>🎮 集中ボーナス: +¥{pool.bonus.toLocaleString()}</span>
+                  <span title={`${focusMinutes}分の集中時間 × ¥${TIME_BONUS_RATE}/h = +¥${pool.bonus.toLocaleString()}`}>🎮 集中ボーナス: +¥{pool.bonus.toLocaleString()}</span>
                 )}
                 {remaining !== null && (
                   <span className={remaining < 0 ? 'text-red-500 font-medium' : ''}>
@@ -838,7 +838,7 @@ function TimeMoneyChart({ records, timeLogs, yearMonth }: { records: FinanceReco
     }
 
     for (const tl of timeLogs) {
-      if (!tl.duration || tl.category !== 'job_hunting') continue
+      if (!tl.duration) continue
       const day = format(new Date(tl.start_time), 'yyyy-MM-dd')
       if (day.startsWith(monthStr)) {
         const entry = days.find((d) => d.date === day)
@@ -1075,29 +1075,29 @@ export function FinanceView({
     return map
   }, [prevMonthRecords])
 
-  const monthlyJobMinutes = useMemo(() => {
+  const monthlyFocusMinutes = useMemo(() => {
     let total = 0
     for (const tl of timeLogs) {
-      if (tl.category === 'job_hunting' && tl.duration && tl.start_time.startsWith(monthStr)) {
+      if (tl.duration && tl.start_time.startsWith(monthStr)) {
         total += tl.duration
       }
     }
     return total
   }, [timeLogs, monthStr])
 
-  const timeBonus = Math.floor((monthlyJobMinutes / 60) * TIME_BONUS_RATE)
+  const timeBonus = Math.floor((monthlyFocusMinutes / 60) * TIME_BONUS_RATE)
 
-  const prevMonthJobMinutes = useMemo(() => {
+  const prevMonthFocusMinutes = useMemo(() => {
     let total = 0
     for (const tl of timeLogs) {
-      if (tl.category === 'job_hunting' && tl.duration && tl.start_time.startsWith(prevMonthStr)) {
+      if (tl.duration && tl.start_time.startsWith(prevMonthStr)) {
         total += tl.duration
       }
     }
     return total
   }, [timeLogs, prevMonthStr])
 
-  const prevMonthTimeBonus = Math.floor((prevMonthJobMinutes / 60) * TIME_BONUS_RATE)
+  const prevMonthTimeBonus = Math.floor((prevMonthFocusMinutes / 60) * TIME_BONUS_RATE)
 
   useEffect(() => {
     if (!budget) return
@@ -1157,7 +1157,7 @@ export function FinanceView({
               budget={budget}
               poolTotals={poolTotals}
               timeBonus={timeBonus}
-              focusMinutes={monthlyJobMinutes}
+              focusMinutes={monthlyFocusMinutes}
               monthLabel={monthLabel}
               onUpdateBase={onUpdateBase}
               recurringTemplates={recurringTemplates}

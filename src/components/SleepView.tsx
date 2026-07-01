@@ -3,6 +3,12 @@ import { format, parseISO, differenceInMinutes, getHours, getMinutes, subDays, a
 import { ja } from 'date-fns/locale'
 import type { SleepLog } from '../types'
 
+function getSleepDate(): string {
+  const now = new Date()
+  if (getHours(now) < 12) return format(subDays(now, 1), 'yyyy-MM-dd')
+  return format(now, 'yyyy-MM-dd')
+}
+
 interface SleepViewProps {
   sleepLogs: SleepLog[]
   days: Date[]
@@ -88,6 +94,7 @@ function calcTotalSleep(log: SleepLog): number | null {
 
 export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Time, onUpdateTimes }: SleepViewProps) {
   const today = format(new Date(), 'yyyy-MM-dd')
+  const sleepToday = useMemo(() => getSleepDate(), [])
 
   const [editModal, setEditModal] = useState<{
     dateStr: string
@@ -102,7 +109,7 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
 
   const [resetPicker, setResetPicker] = useState(false)
 
-  const [mobileDate, setMobileDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  const [mobileDate, setMobileDate] = useState(() => getSleepDate())
 
   const mobileLog = useMemo(() => sleepLogs.find((l) => l.date === mobileDate), [sleepLogs, mobileDate])
 
@@ -188,7 +195,7 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
     <div className="min-h-screen bg-slate-900 text-slate-100">
       {/* ── Mobile ── */}
       <div className="block md:hidden px-4 pt-8 pb-24">
-        <h2 className="text-center text-lg font-bold mb-1">{mobileDate === today ? '今日の睡眠' : '睡眠記録'}</h2>
+        <h2 className="text-center text-lg font-bold mb-1">{mobileDate === sleepToday ? '今日の睡眠' : '睡眠記録'}</h2>
         {/* 日付ナビゲーション */}
         <div className="flex items-center justify-center gap-4 mb-2">
           <button
@@ -202,12 +209,23 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
           </span>
           <button
             onClick={() => setMobileDate((p) => format(addDays(parseISO(p), 1), 'yyyy-MM-dd'))}
-            disabled={mobileDate === today}
+            disabled={mobileDate === sleepToday}
             className="text-slate-400 hover:text-white text-lg px-2 disabled:opacity-30 disabled:cursor-not-allowed"
           >
             ›
           </button>
         </div>
+
+        {mobileDate !== sleepToday && (
+          <div className="text-center mb-3">
+            <button
+              onClick={() => setMobileDate(sleepToday)}
+              className="text-xs text-indigo-400 underline hover:text-indigo-300"
+            >
+              今日の睡眠に戻る
+            </button>
+          </div>
+        )}
 
         {/* 昨日未記録リマインダー */}
         {yesterdayLog && !yesterdayLog.bed_time && !yesterdayLog.sleep_time && !yesterdayLog.wake_time && yesterday !== mobileDate && (
@@ -229,7 +247,7 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
               <div className="text-sm text-slate-400 mb-1">ベッドに入った</div>
               <div className="text-xl font-mono">{formatTime(mobileLog.bed_time)}</div>
             </div>
-          ) : mobileDate === today ? (
+          ) : mobileDate === sleepToday ? (
             <div className="w-full flex gap-2">
               <button
                 onClick={() => onUpdateTimes(mobileDate, { bed_time: new Date().toISOString() })}
@@ -265,7 +283,7 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
                 </div>
               )}
             </div>
-          ) : mobileDate === today ? (
+          ) : mobileDate === sleepToday ? (
             <div className="w-full flex gap-2">
               <button
                 onClick={() => onUpdateTimes(mobileDate, { sleep_time: new Date().toISOString() })}
@@ -296,7 +314,7 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
               <div className="text-sm text-slate-400 mb-1">起きた</div>
               <div className="text-xl font-mono">{formatTime(mobileLog.wake_time)}</div>
             </div>
-          ) : mobileDate === today ? (
+          ) : mobileDate === sleepToday ? (
             <div className="w-full flex gap-2">
               <button
                 onClick={() => onUpdateTimes(mobileDate, { wake_time: new Date().toISOString() })}

@@ -554,7 +554,7 @@ export function FocusView({ timeLogs, baseDate, onGoToFinance }: FocusViewProps)
     const today = format(new Date(), 'yyyy-MM-dd')
     let minutes = 0
     for (const l of timeLogs.logs) {
-      if (l.category === 'job_hunting' && l.duration && l.start_time.startsWith(today)) {
+      if (l.duration && l.start_time.startsWith(today)) {
         minutes += l.duration
       }
     }
