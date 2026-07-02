@@ -14,6 +14,7 @@ import { FinanceView } from './components/FinanceView'
 import { DiaryView } from './components/DiaryView'
 import { HomeView } from './components/HomeView'
 import { ScheduleView } from './components/ScheduleView'
+import { ReviewCanvas } from './components/ReviewCanvas'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -105,6 +106,7 @@ function App() {
   const isFinance = dates.viewMode === 'finance'
   const isDiary = dates.viewMode === 'diary'
   const isSchedule = dates.viewMode === 'schedule'
+  const isReview = dates.viewMode === 'review'
 
   const focusDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
   useEffect(() => {
@@ -188,7 +190,7 @@ function App() {
 
   return (
     <div className={`min-h-screen transition-colors ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
-      {(!isDiary || diarySubMode === 'calendar') && (
+      {(!isDiary || diarySubMode === 'calendar') && !isReview && (
         <Header
           rangeLabel={dates.rangeLabel}
           viewMode={dates.viewMode}
@@ -198,7 +200,7 @@ function App() {
           onViewModeChange={handleViewModeChange}
           managing={showManagement}
           onManage={handleManage}
-          hideDateNav={isHome || dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary || isSchedule}
+          hideDateNav={isHome || dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary || isSchedule || isReview}
           dark={isDark}
         />
       )}
@@ -260,7 +262,9 @@ function App() {
             onUpdate={diary.update}
             onModeChange={setDiarySubMode}
           />
-        ) : isSleep ? (
+          ) : isReview ? (
+            <ReviewCanvas />
+          ) : isSleep ? (
           <SleepView
             sleepLogs={sleepLogs.logs}
             days={dates.days}
@@ -340,7 +344,7 @@ function App() {
       </main>
       )}
 
-      {!showManagement && !isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && (
+      {!showManagement && !isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -349,7 +353,7 @@ function App() {
         </button>
       )}
 
-      {!isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && (
+      {!isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && (
         <>
           <Toast
             key={toast.key}

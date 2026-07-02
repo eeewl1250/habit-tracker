@@ -50,6 +50,7 @@ const navGroups: NavGroup[] = [
     items: [
       { key: 'finance', label: '家計簿' },
       { key: 'notes', label: 'メモ' },
+      { key: 'review', label: '復盤' },
     ],
   },
 ]
