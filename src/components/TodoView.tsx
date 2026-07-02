@@ -13,6 +13,7 @@ interface EditForm {
   title: string
   category: TodoCategory
   estimated_minutes: number
+  actual_minutes: number
   source_url: string
 }
 
@@ -149,6 +150,7 @@ export function TodoView() {
       title: todo.title,
       category: todo.category as TodoCategory,
       estimated_minutes: todo.estimated_minutes,
+      actual_minutes: todo.actual_minutes,
       source_url: todo.source_url || '',
     })
     setEditingTodo(todo)
@@ -160,6 +162,7 @@ export function TodoView() {
       title: editForm.title.trim(),
       category: editForm.category,
       estimated_minutes: editForm.estimated_minutes,
+      actual_minutes: editForm.actual_minutes,
       source_url: editForm.source_url || null,
     })
     setEditingTodo(null)
@@ -509,8 +512,8 @@ export function TodoView() {
                   <input
                     type="number"
                     min={0}
-                    value={editingTodo.actual_minutes}
-                    onChange={e => updateField(editingTodo.id, { actual_minutes: Math.max(0, parseInt(e.target.value) || 0) })}
+                    value={editForm.actual_minutes}
+                    onChange={e => setEditForm(f => ({ ...f, actual_minutes: Math.max(0, parseInt(e.target.value) || 0) }))}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                 </div>
