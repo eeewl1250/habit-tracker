@@ -11,6 +11,7 @@ import { useSchedules } from '../hooks/useSchedules'
 import { ScheduleEditor } from './ScheduleEditor'
 import { SchedulePopover } from './SchedulePopover'
 import { CategoryManager } from './CategoryManager'
+import { ScheduleAIParser } from './ScheduleAIParser'
 
 type ScheduleViewMode = 'month' | 'week' | 'day'
 
@@ -33,6 +34,7 @@ export function ScheduleView() {
     Object.fromEntries(cats.map((c) => [c.key, true]))
   )
   const [showEditor, setShowEditor] = useState(false)
+  const [showAIParser, setShowAIParser] = useState(false)
   const [editing, setEditing] = useState<{ id: string; date?: string } | null>(null)
   const [showCategoryManager, setShowCategoryManager] = useState(false)
   const [popoverTarget, setPopoverTarget] = useState<{ instance: ReturnType<typeof useSchedules> extends { getInstances(...args: unknown[]): infer R } ? R[number] : never; el: HTMLElement } | null>(null)
@@ -103,6 +105,12 @@ export function ScheduleView() {
     }
   }
 
+  const handleSaveAI = useCallback(async (entries: ScheduleFormData[]) => {
+    for (const form of entries) {
+      await add(form)
+    }
+  }, [add])
+
   const handleEditRecurringThis = async () => {
     if (!editRecurringChoice) return
     const { form, id, date } = editRecurringChoice
@@ -163,6 +171,12 @@ export function ScheduleView() {
             className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             + 追加
+          </button>
+          <button
+            onClick={() => setShowAIParser(true)}
+            className="px-3 py-1 text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90"
+          >
+            AI追加
           </button>
         </div>
 
@@ -252,6 +266,13 @@ export function ScheduleView() {
             }
             setPopoverTarget(null)
           }}
+        />
+      )}
+
+      {showAIParser && (
+        <ScheduleAIParser
+          onSave={handleSaveAI}
+          onClose={() => setShowAIParser(false)}
         />
       )}
 
