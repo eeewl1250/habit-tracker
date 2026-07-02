@@ -9,7 +9,7 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { diffChars } from 'diff'
 import { correctDiary } from '../lib/gemini'
-import { getSavedThemeId, saveThemeId, getTheme, buildBlockComponents, buildMarkdownComponents } from '../lib/markdownThemes'
+import { getSavedThemeId, getTheme, buildMarkdownComponents } from '../lib/markdownThemes'
 import type { DiaryEntry } from '../types'
 
 export type DiarySubMode = 'calendar' | 'editor'
@@ -89,7 +89,7 @@ function DiaryEditor({
   const [lastSavedLabel, setLastSavedLabel] = useState<string | null>(null)
   const isDirty = text !== lastSavedTextRef.current
 
-  const [themeId, setThemeId] = useState<string>(getSavedThemeId)
+  const [themeId] = useState<string>(getSavedThemeId)
   const [showThemePicker, setShowThemePicker] = useState(false)
   const themeRef = useRef<HTMLDivElement>(null)
   const currentTheme = getTheme(themeId)
