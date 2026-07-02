@@ -37,6 +37,7 @@ const navGroups: NavGroup[] = [
   {
     label: '記録',
     items: [
+      { key: 'schedule', label: '日程' },
       { key: 'diary', label: '日記' },
       { key: 'sleep', label: '睡眠' },
       { key: 'focus', label: '集中' },

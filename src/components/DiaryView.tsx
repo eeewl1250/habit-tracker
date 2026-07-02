@@ -117,11 +117,10 @@ function DiaryEditor({
   onUpdate: (date: string, updates: { original_text?: string; corrected_text?: string | null; ai_advice?: string | null }) => Promise<DiaryEntry | null>
   onBack: () => void
 }) {
-  const [blocks, setBlocks] = useState<string[]>(() => {
-    const text = entry?.original_text ?? ''
-    return text ? splitIntoBlocks(text) : ['']
-  })
-  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [text, setText] = useState<string>(entry?.original_text ?? '')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const textRef = useRef(text)
+  textRef.current = text
   const [correctedText, setCorrectedText] = useState<string | null>(entry?.corrected_text ?? null)
   const [aiAdvice, setAiAdvice] = useState<string | null>(entry?.ai_advice ?? null)
   const [isCorrectionLoading, setIsCorrectionLoading] = useState(false)
@@ -130,13 +129,10 @@ function DiaryEditor({
   const [showCorrection, setShowCorrection] = useState(!!entry?.corrected_text)
   const [activeTab, setActiveTab] = useState<'correction' | 'edit'>('correction')
   const entryRef = useRef(entry ?? null)
-  const blockRefs = useRef<(HTMLTextAreaElement | null)[]>([])
-  const blockRef = useRef(blocks)
-  blockRef.current = blocks
-  const originalText = blocks.join('\n')
+  const originalText = text
   const lastSavedTextRef = useRef(originalText)
   const [lastSavedLabel, setLastSavedLabel] = useState<string | null>(null)
-  const isDirty = originalText !== lastSavedTextRef.current
+  const isDirty = text !== lastSavedTextRef.current
 
   const [themeId, setThemeId] = useState<string>(getSavedThemeId)
   const [showThemePicker, setShowThemePicker] = useState(false)
@@ -165,25 +161,25 @@ function DiaryEditor({
   const dateObj = parseISO(dateStr)
   const dateLabel = format(dateObj, 'yyyy年 M月 d日 (E)', { locale: ja })
 
-  const doSave = useCallback(async (text: string) => {
+  const doSave = useCallback(async (content: string) => {
     if (entryRef.current) {
-      await onUpdate(dateStr, { original_text: text })
+      await onUpdate(dateStr, { original_text: content })
     } else {
-      const created = await onSave(dateStr, text)
+      const created = await onSave(dateStr, content)
       if (created) entryRef.current = created
     }
-    lastSavedTextRef.current = text
+    lastSavedTextRef.current = content
     setLastSavedLabel(format(new Date(), 'HH:mm'))
   }, [dateStr, onSave, onUpdate])
 
   // Auto-save every 60s
   useEffect(() => {
     const timer = setInterval(async () => {
-      const text = blockRef.current.join('\n')
-      if (!text.trim()) return
-      if (text === lastSavedTextRef.current) return
+      const currentText = textRef.current
+      if (!currentText.trim()) return
+      if (currentText === lastSavedTextRef.current) return
       try {
-        await doSave(text)
+        await doSave(currentText)
       } catch { /* silent */ }
     }, 60_000)
     return () => clearInterval(timer)
@@ -218,188 +214,23 @@ function DiaryEditor({
     }
   }, [originalText])
 
-  const updateBlock = useCallback((idx: number, value: string) => {
-    setBlocks(prev => { const n = [...prev]; n[idx] = value; return n })
-  }, [])
-
-  const activateBlock = useCallback((idx: number) => {
-    setEditingIdx(idx)
-    setTimeout(() => {
-      const el = blockRefs.current[idx]
-      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) }
-    })
-  }, [])
-
-  const isCodeFenceBlock = useCallback((text: string) => {
-    return text.trimStart().startsWith('```') || text.trimStart().startsWith('~~~')
-  }, [])
-
-  const handleBlockKeyDown = useCallback((e: React.KeyboardEvent, idx: number) => {
-    const target = e.currentTarget as HTMLTextAreaElement
-
-    if (e.key === 'Tab') {
-      e.preventDefault()
-      const text = blocks[idx]
-      const cursorPos = target.selectionStart
-      const lineStart = text.lastIndexOf('\n', cursorPos - 1) + 1
-      const lineEnd = text.indexOf('\n', cursorPos)
-      const lineEndIdx = lineEnd === -1 ? text.length : lineEnd
-      const line = text.slice(lineStart, lineEndIdx)
-      const listMatch = line.match(/^(\s*)([-*+]|\d+[.)])\s/)
-
-      if (listMatch) {
-        const indent = listMatch[1]
-        const marker = listMatch[2]
-        const currentLevel = Math.floor(indent.length / 2)
-
-        if (!e.shiftKey) {
-          const newLevel = currentLevel + 1
-          const markers = ['-', '-', '*', '+', '>']
-          const defaultMarker = newLevel < markers.length ? markers[newLevel] : '+'
-          const newMarker = /^\d/.test(marker) ? marker : defaultMarker
-          const newLine = '  '.repeat(newLevel) + newMarker + ' '
-          const newText = text.slice(0, lineStart) + newLine + text.slice(lineEndIdx)
-          setBlocks(prev => { const n = [...prev]; n[idx] = newText; return n })
-          requestAnimationFrame(() => { target.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length) })
-        } else if (currentLevel > 0) {
-          const newLevel = currentLevel - 1
-          const markers = ['-', '-', '*', '+', '>']
-          const defaultMarker = newLevel < markers.length ? markers[newLevel] : '-'
-          const newMarker = /^\d/.test(marker) ? marker : defaultMarker
-          const newLine = '  '.repeat(newLevel) + newMarker + ' '
-          const newText = text.slice(0, lineStart) + newLine + text.slice(lineEndIdx)
-          setBlocks(prev => { const n = [...prev]; n[idx] = newText; return n })
-          requestAnimationFrame(() => { target.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length) })
-        }
-      } else if (cursorPos > 0 && text[cursorPos - 1] === '\n') {
-        const newText = text.slice(0, cursorPos) + '  ' + text.slice(cursorPos)
-        setBlocks(prev => { const n = [...prev]; n[idx] = newText; return n })
-        requestAnimationFrame(() => { target.setSelectionRange(cursorPos + 2, cursorPos + 2) })
-      } else if (!e.shiftKey) {
-        const before = text.slice(0, cursorPos)
-        const after = text.slice(cursorPos)
-        setBlocks(prev => { const n = [...prev]; n[idx] = before + '  ' + after; return n })
-        requestAnimationFrame(() => { target.setSelectionRange(cursorPos + 2, cursorPos + 2) })
-      }
-      return
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      if (isCodeFenceBlock(blocks[idx])) {
-        e.preventDefault()
-        const cursorPos = target.selectionStart
-        const before = blocks[idx].slice(0, cursorPos)
-        const after = blocks[idx].slice(cursorPos)
-        setBlocks(prev => { const n = [...prev]; n[idx] = before + '\n' + after; return n })
-        setTimeout(() => { target.setSelectionRange(cursorPos + 1, cursorPos + 1) })
-      } else {
-        const beforeCursor = blocks[idx].slice(0, target.selectionStart)
-        const lineStart = beforeCursor.lastIndexOf('\n') + 1
-        const lineText = beforeCursor.slice(lineStart)
-        const markerMatch = lineText.match(/^(\s*(?:[-*+]|\d+\.|>)\s)/)
-
-        if (markerMatch) {
-          const marker = markerMatch[1]
-          const afterMarker = lineText.slice(marker.length)
-
-          if (afterMarker.trim() === '') {
-            // Empty marker → exit (split)
-            e.preventDefault()
-            const cursorPos = target.selectionStart
-            const before = blocks[idx].slice(0, cursorPos)
-            const after = blocks[idx].slice(cursorPos)
-            setBlocks(prev => { const n = [...prev]; n[idx] = before; n.splice(idx + 1, 0, after); return n })
-            setEditingIdx(idx + 1)
-            setTimeout(() => { blockRefs.current[idx + 1]?.focus() })
-          } else {
-            // Has content → continue list/quote
-            e.preventDefault()
-            const cursorPos = target.selectionStart
-            const before = blocks[idx].slice(0, cursorPos)
-            const after = blocks[idx].slice(cursorPos)
-            const insertion = '\n' + marker
-            setBlocks(prev => { const n = [...prev]; n[idx] = before + insertion + after; return n })
-            setTimeout(() => { target.setSelectionRange(cursorPos + insertion.length, cursorPos + insertion.length) })
-          }
-        } else {
-          // Normal split
-          e.preventDefault()
-          const cursorPos = target.selectionStart
-          const before = blocks[idx].slice(0, cursorPos)
-          const after = blocks[idx].slice(cursorPos)
-          setBlocks(prev => { const n = [...prev]; n[idx] = before; n.splice(idx + 1, 0, after); return n })
-          setEditingIdx(idx + 1)
-          setTimeout(() => { blockRefs.current[idx + 1]?.focus() })
-        }
-      }
-      return
-    }
-
-    if (e.key === 'Backspace' && target.selectionStart === 0 && target.selectionEnd === 0 && idx > 0) {
-      e.preventDefault()
-      const prevLen = blocks[idx - 1].length
-      setBlocks(prev => { const n = [...prev]; n[idx - 1] += n[idx]; n.splice(idx, 1); return n })
-      setEditingIdx(idx - 1)
-      setTimeout(() => {
-        const el = blockRefs.current[idx - 1]
-        if (el) { el.focus(); el.setSelectionRange(prevLen, prevLen) }
-      })
-      return
-    }
-
-    if (e.key === 'ArrowUp' && idx > 0) {
-      e.preventDefault()
-      const cursorPos = target.selectionStart
-      setEditingIdx(idx - 1)
-      setTimeout(() => {
-        const el = blockRefs.current[idx - 1]
-        if (el) { el.focus(); el.setSelectionRange(Math.min(cursorPos, el.value.length), Math.min(cursorPos, el.value.length)) }
-      })
-      return
-    }
-
-    if (e.key === 'ArrowDown' && idx < blocks.length - 1) {
-      e.preventDefault()
-      const cursorPos = target.selectionStart
-      setEditingIdx(idx + 1)
-      setTimeout(() => {
-        const el = blockRefs.current[idx + 1]
-        if (el) { el.focus(); el.setSelectionRange(Math.min(cursorPos, el.value.length), Math.min(cursorPos, el.value.length)) }
-      })
-      return
-    }
-  }, [blocks])
-
   const handleGoToEdit = useCallback(() => {
     setActiveTab('edit')
-    setEditingIdx(blocks.length - 1)
-  }, [blocks.length])
+  }, [])
 
   const handleToolbarInsert = useCallback((before: string, after: string, placeholder?: string) => {
-    const idx = editingIdx ?? blocks.length - 1
-    setEditingIdx(idx)
-
-    setTimeout(() => {
-      const el = blockRefs.current[idx]
-      if (!el) return
-
-      el.focus()
-      const start = el.selectionStart
-      const end = el.selectionEnd
-      const selected = blocks[idx].slice(start, end)
-      const insert = selected || placeholder || ''
-      const newText = before + insert + after
-
-      setBlocks(prev => {
-        const n = [...prev]
-        n[idx] = n[idx].slice(0, start) + newText + n[idx].slice(end)
-        return n
-      })
-
-      const cursorPos = start + before.length + (selected || placeholder || '').length
-      setTimeout(() => { el.setSelectionRange(cursorPos, cursorPos); el.focus() })
-    })
-  }, [editingIdx, blocks])
+    const el = textareaRef.current
+    if (!el) return
+    el.focus()
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const selected = text.slice(start, end)
+    const insert = selected || placeholder || ''
+    const newText = before + insert + after
+    setText(prev => prev.slice(0, start) + newText + prev.slice(end))
+    const cursorPos = start + before.length + (selected || placeholder || '').length
+    setTimeout(() => { el.setSelectionRange(cursorPos, cursorPos); el.focus() })
+  }, [text])
 
   const [showHeadingPicker, setShowHeadingPicker] = useState(false)
   const headingRef = useRef<HTMLDivElement>(null)
@@ -505,94 +336,62 @@ function DiaryEditor({
       {/* Main content */}
       <div className="flex-1 min-h-0 overflow-hidden flex justify-center">
         {activeTab === 'edit' ? (
-          <div className="h-full overflow-y-auto bg-white border border-gray-200 rounded max-w-5xl w-full my-2">
-            {activeTab === 'edit' && (
-              <div ref={toolbarRef} className="sticky top-0 z-10 flex items-center gap-0.5 px-2 py-1 border-b border-gray-200 bg-gray-50">
-                {toolbarButtons.map((btn) => (
-                  <button
-                    key={btn.label + btn.title}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      handleToolbarInsert(btn.before, btn.after, btn.placeholder)
-                    }}
-                    title={btn.title}
-                    className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
-                  >
-                    {btn.label}
-                  </button>
-                ))}
-                <span className="w-px h-4 bg-gray-300 mx-0.5" />
-                <div className="relative" ref={headingRef}>
-                  <button
-                    onMouseDown={(e) => { e.preventDefault(); setShowHeadingPicker(p => !p) }}
-                    title="見出し"
-                    className="px-2 py-1 text-xs font-mono text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
-                  >
-                    H ▾
-                  </button>
-                  {showHeadingPicker && (
-                    <div className="absolute top-full left-0 mt-0.5 bg-white border border-gray-200 rounded shadow-lg z-20 min-w-[5rem]">
-                      {headingLevels.map(h => (
-                        <button
-                          key={h.label}
-                          onMouseDown={(e) => {
-                            e.preventDefault()
-                            handleToolbarInsert(h.before, '', h.placeholder)
-                            setShowHeadingPicker(false)
-                          }}
-                          className="block w-full px-3 py-1.5 text-xs text-left text-gray-600 hover:bg-gray-100"
-                        >
-                          {h.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            {blocks.length === 0 && (
-              <div
-                className="px-4 py-2 cursor-text text-sm text-gray-400"
-                onClick={() => activateBlock(0)}
-              >
-                クリックして入力を開始
-              </div>
-            )}
-            {blocks.map((blockText, idx) => (
-              <div key={idx}>
-                {editingIdx === idx ? (
-                  <textarea
-                    ref={el => {
-                      blockRefs.current[idx] = el
-                      if (el) { el.style.height = '0px'; el.style.height = el.scrollHeight + 'px' }
-                    }}
-                    value={blockText}
-                    onChange={e => { updateBlock(idx, e.target.value); e.target.style.height = '0px'; e.target.style.height = e.target.scrollHeight + 'px' }}
-                    onKeyDown={e => handleBlockKeyDown(e, idx)}
-                    onBlur={(e) => {
-                      if (toolbarRef.current?.contains(e.relatedTarget as Node)) return
-                      setEditingIdx(null)
-                    }}
-                    placeholder="入力..."
-                    className="w-full px-4 py-1.5 text-sm font-mono leading-relaxed resize-none overflow-hidden focus:outline-none border-l-[3px] border-blue-400 bg-yellow-50"
-                    autoFocus
-                  />
-                ) : (
-                  <div
-                    className="px-4 py-1.5 cursor-text hover:bg-gray-50 transition-colors markdown-preview"
-                    onClick={() => activateBlock(idx)}
-                  >
-                    {blockText ? (
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={blockComponents}>
-                        {blockText}
-                      </ReactMarkdown>
-                    ) : (
-                      <span className="text-gray-300">{'\u200B'}</span>
-                    )}
+          <div className="h-full w-full max-w-5xl flex flex-col my-2">
+            {/* Toolbar */}
+            <div ref={toolbarRef} className="sticky top-0 z-10 flex items-center gap-0.5 px-2 py-1 border-b border-gray-200 bg-gray-50 overflow-x-auto">
+              {toolbarButtons.map((btn) => (
+                <button
+                  key={btn.label + btn.title}
+                  onMouseDown={(e) => { e.preventDefault(); handleToolbarInsert(btn.before, btn.after, btn.placeholder) }}
+                  title={btn.title}
+                  className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
+                >
+                  {btn.label}
+                </button>
+              ))}
+              <span className="w-px h-4 bg-gray-300 mx-0.5" />
+              <div className="relative" ref={headingRef}>
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); setShowHeadingPicker(p => !p) }}
+                  title="見出し"
+                  className="px-2 py-1 text-xs font-mono text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
+                >
+                  H ▾
+                </button>
+                {showHeadingPicker && (
+                  <div className="absolute top-full left-0 mt-0.5 bg-white border border-gray-200 rounded shadow-lg z-20 min-w-[5rem]">
+                    {headingLevels.map(h => (
+                      <button
+                        key={h.label}
+                        onMouseDown={(e) => { e.preventDefault(); handleToolbarInsert(h.before, '', h.placeholder); setShowHeadingPicker(false) }}
+                        className="block w-full px-3 py-1.5 text-xs text-left text-gray-600 hover:bg-gray-100"
+                      >
+                        {h.label}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
-            ))}
+            </div>
+            {/* Editor body */}
+            <div className="flex-1 flex flex-col md:flex-row min-h-0">
+              <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="今日の出来事を書こう..."
+                className="w-full md:w-1/2 min-h-[300px] md:min-h-0 p-4 text-sm font-mono leading-relaxed resize-none border-r border-gray-200 focus:outline-none"
+              />
+              <div className="hidden md:block w-1/2 overflow-y-auto p-4 bg-white markdown-preview">
+                {text.trim() ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
+                    {text}
+                  </ReactMarkdown>
+                ) : (
+                  <div className="text-sm text-gray-400">プレビュー</div>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="h-full overflow-y-auto p-4 space-y-6 max-w-5xl w-full my-2">

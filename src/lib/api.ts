@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord, DiaryEntry, BaseCategory, Motivation } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord, DiaryEntry, BaseCategory, Motivation, Schedule, ScheduleFormData } from '../types'
 import { CATEGORY_COLOR_PAIRS, resolveTargetPool } from '../types'
 
 // ── Tasks ──
@@ -633,4 +633,84 @@ export async function updateDiaryEntry(
     .single()
   if (error) throw error
   return data
+}
+
+// ── Schedule ──
+
+export async function fetchSchedules(): Promise<Schedule[]> {
+  const { data, error } = await supabase
+    .from('schedules')
+    .select('*')
+    .order('date_start', { ascending: true })
+    .order('time_start', { ascending: true, nullsFirst: true })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createSchedule(form: ScheduleFormData): Promise<Schedule> {
+  const payload: Record<string, unknown> = {
+    title: form.title,
+    category: form.category,
+    date_start: form.date_start,
+    time_start: form.time_start || null,
+    time_end: form.time_end || null,
+    url: form.url || null,
+    memo: form.memo || null,
+    is_recurring: form.is_recurring,
+  }
+  if (form.is_recurring) {
+    payload.rec_unit = form.rec_unit
+    payload.rec_interval = form.rec_interval
+    payload.rec_days = form.rec_days.length > 0 ? JSON.stringify(form.rec_days) : null
+    payload.rec_end_date = form.rec_end_date || null
+  }
+  const { data, error } = await supabase
+    .from('schedules')
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateSchedule(id: string, form: Partial<ScheduleFormData>): Promise<Schedule> {
+  const payload: Record<string, unknown> = {}
+  if (form.title !== undefined) payload.title = form.title
+  if (form.category !== undefined) payload.category = form.category
+  if (form.date_start !== undefined) payload.date_start = form.date_start
+  if (form.time_start !== undefined) payload.time_start = form.time_start || null
+  if (form.time_end !== undefined) payload.time_end = form.time_end || null
+  if (form.url !== undefined) payload.url = form.url || null
+  if (form.memo !== undefined) payload.memo = form.memo || null
+  if (form.excluded_dates !== undefined) payload.excluded_dates = form.excluded_dates
+  if (form.is_recurring !== undefined) {
+    payload.is_recurring = form.is_recurring
+    if (form.is_recurring) {
+      payload.rec_unit = form.rec_unit
+      payload.rec_interval = form.rec_interval
+      payload.rec_days = form.rec_days.length > 0 ? JSON.stringify(form.rec_days) : null
+      payload.rec_end_date = form.rec_end_date || null
+    } else {
+      payload.rec_unit = null
+      payload.rec_interval = null
+      payload.rec_days = null
+      payload.rec_end_date = null
+    }
+  }
+  const { data, error } = await supabase
+    .from('schedules')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteSchedule(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('schedules')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
 }
