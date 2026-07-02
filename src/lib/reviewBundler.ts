@@ -1,7 +1,7 @@
 import {
   fetchTasks, fetchLogs, fetchSleepLogs, fetchTimeLogs,
   fetchCravingLogs, fetchMenstruationLogs, fetchDiaryEntries,
-  fetchSchedules,
+  fetchSchedules, fetchMonthlyTodoStats,
 } from './api'
 import type { Task, DailyLog, SleepLog, TimeLog, CravingLog, MenstruationLog, DiaryEntry, Schedule } from '../types'
 import { format, startOfMonth, endOfMonth, getDaysInMonth, parseISO, differenceInMinutes, differenceInCalendarDays, eachDayOfInterval } from 'date-fns'
@@ -37,6 +37,7 @@ export interface MonthlyBundle {
   diaryCount: number
   scheduleCount: number
   keyEvents: { date: string; title: string; category: string }[]
+  todoStats: { total: number; completed: number; focusMinutes: number }
 }
 
 const HOUSEHOLD_KEYWORDS: Record<string, string[]> = {
@@ -77,7 +78,7 @@ export async function bundleMonthlyData(yearMonth: string): Promise<MonthlyBundl
   const daysInMonth = getDaysInMonth(baseDate)
   const allDates = eachDayOfInterval({ start: startOfMonth(baseDate), end: endOfMonth(baseDate) }).map(d => format(d, 'yyyy-MM-dd'))
 
-  const [tasks, dailyLogs, sleepLogs, timeLogs, cravingLogs, menstruationLogs, diaryEntries, schedules] = await Promise.all([
+  const [tasks, dailyLogs, sleepLogs, timeLogs, cravingLogs, menstruationLogs, diaryEntries, schedules, todoStats] = await Promise.all([
     fetchTasks(),
     fetchLogs(dateStart, dateEnd),
     fetchSleepLogs(dateStart, dateEnd),
@@ -86,6 +87,7 @@ export async function bundleMonthlyData(yearMonth: string): Promise<MonthlyBundl
     fetchMenstruationLogs([yearMonth]),
     fetchDiaryEntries(dateStart, dateEnd),
     fetchSchedules(),
+    fetchMonthlyTodoStats(yearMonth),
   ])
 
   const activeTasks = tasks.filter(t => t.status === 'active')
@@ -291,5 +293,6 @@ export async function bundleMonthlyData(yearMonth: string): Promise<MonthlyBundl
     diaryCount: diaryEntries.length,
     scheduleCount: monthSchedules.length,
     keyEvents,
+    todoStats,
   }
 }

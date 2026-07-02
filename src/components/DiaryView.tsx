@@ -10,7 +10,8 @@ import remarkBreaks from 'remark-breaks'
 import { diffChars } from 'diff'
 import { correctDiary } from '../lib/gemini'
 import { getSavedThemeId, getTheme, buildMarkdownComponents } from '../lib/markdownThemes'
-import type { DiaryEntry } from '../types'
+import type { DiaryEntry, Todo } from '../types'
+import { fetchCompletedTodosForDate } from '../lib/api'
 
 export type DiarySubMode = 'calendar' | 'editor'
 
@@ -143,6 +144,12 @@ function DiaryEditor({
   textRef.current = text
   const lastSavedTextRef = useRef(text)
   const isDirty = text !== lastSavedTextRef.current
+
+  const [completedTodos, setCompletedTodos] = useState<Todo[]>([])
+
+  useEffect(() => {
+    fetchCompletedTodosForDate(dateStr).then(setCompletedTodos).catch(() => {})
+  }, [dateStr])
 
   const [images, setImages] = useState<string[]>([])
   const imgInputRef = useRef<HTMLInputElement>(null)
@@ -446,6 +453,24 @@ function DiaryEditor({
                     rows={2}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
                   />
+                  {key === 'footprint' && completedTodos.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {completedTodos.map(todo => (
+                        <button
+                          key={todo.id}
+                          onClick={() => {
+                            const existing = structured.footprint.trim()
+                            const clue = todo.title
+                            const newVal = existing ? `${existing}、${clue}` : clue
+                            updateStructured('footprint', newVal)
+                          }}
+                          className="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
+                        >
+                          ✅ {todo.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               <div className="flex justify-end pt-2">

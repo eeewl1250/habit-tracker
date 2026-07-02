@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord, DiaryEntry, BaseCategory, Motivation, Schedule, ScheduleFormData } from '../types'
+import type { Task, DailyLog, TaskFormData, Category, Note, NoteWithTask, MenstruationLog, CravingLog, SleepLog, TimeLog, TimeLogFormData, FinanceRecord, FinanceFormData, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord, DiaryEntry, BaseCategory, Motivation, Schedule, ScheduleFormData, Todo, TodoFormData, TodoStatus, TodoCategory } from '../types'
 import { CATEGORY_COLOR_PAIRS, resolveTargetPool } from '../types'
 
 // ── Tasks ──
@@ -713,4 +713,106 @@ export async function deleteSchedule(id: string): Promise<void> {
     .delete()
     .eq('id', id)
   if (error) throw error
+}
+
+// ── Todos ──
+
+export async function fetchTodos(): Promise<Todo[]> {
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .order('sort_order', { ascending: true })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createTodo(form: TodoFormData): Promise<Todo> {
+  const { data, error } = await supabase
+    .from('todos')
+    .insert({
+      title: form.title,
+      category: form.category,
+      status: form.status,
+      estimated_minutes: form.estimated_minutes ?? 0,
+      source_url: form.source_url || null,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateTodo(
+  id: string,
+  updates: Partial<{
+    title: string
+    category: TodoCategory
+    status: TodoStatus
+    estimated_minutes: number
+    actual_minutes: number
+    source_url: string | null
+    diary_clue: string | null
+    sort_order: number
+    completed_at: string | null
+  }>
+): Promise<Todo> {
+  const payload: Record<string, unknown> = {}
+  if (updates.title !== undefined) payload.title = updates.title
+  if (updates.category !== undefined) payload.category = updates.category
+  if (updates.status !== undefined) payload.status = updates.status
+  if (updates.estimated_minutes !== undefined) payload.estimated_minutes = updates.estimated_minutes
+  if (updates.actual_minutes !== undefined) payload.actual_minutes = updates.actual_minutes
+  if (updates.source_url !== undefined) payload.source_url = updates.source_url
+  if (updates.diary_clue !== undefined) payload.diary_clue = updates.diary_clue
+  if (updates.sort_order !== undefined) payload.sort_order = updates.sort_order
+  if (updates.completed_at !== undefined) payload.completed_at = updates.completed_at
+
+  const { data, error } = await supabase
+    .from('todos')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteTodo(id: string): Promise<void> {
+  const { error } = await supabase.from('todos').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchCompletedTodosForDate(date: string): Promise<Todo[]> {
+  const dateStart = date + 'T00:00:00Z'
+  const dateEnd = date + 'T23:59:59Z'
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .eq('status', 'done')
+    .gte('completed_at', dateStart)
+    .lte('completed_at', dateEnd)
+    .order('completed_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function fetchMonthlyTodoStats(yearMonth: string): Promise<{
+  total: number; completed: number; focusMinutes: number
+}> {
+  const [yearStr, monthStr] = yearMonth.split('-')
+  const startDate = `${yearMonth}-01`
+  const endYear = parseInt(yearStr) + (parseInt(monthStr) === 12 ? 1 : 0)
+  const endMonth = parseInt(monthStr) === 12 ? 1 : parseInt(monthStr) + 1
+  const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`
+  const { data, error } = await supabase
+    .from('todos')
+    .select('status, actual_minutes')
+    .gte('created_at', startDate)
+    .lt('created_at', endDate)
+  if (error) throw error
+  const todos = data ?? []
+  const total = todos.length
+  const completed = todos.filter(t => t.status === 'done').length
+  const focusMinutes = todos.reduce((sum, t) => sum + (t.actual_minutes ?? 0), 0)
+  return { total, completed, focusMinutes }
 }

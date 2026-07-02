@@ -250,6 +250,38 @@ export function ReviewCanvas() {
                 </div>
               </div>
 
+              {/* Todo stats */}
+              {data.todoStats.total > 0 && (
+                <div className="rounded-lg border border-gray-200 p-3">
+                  <h3 className="font-semibold text-sm text-gray-700 mb-2">📋 タスク完了率</h3>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-600">
+                      完了 {data.todoStats.completed}/{data.todoStats.total}
+                    </span>
+                    <span className="text-sm font-bold text-gray-800">
+                      {data.todoStats.total > 0 ? Math.round((data.todoStats.completed / data.todoStats.total) * 100) : 0}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
+                    <div
+                      className="h-full rounded-full bg-indigo-500"
+                      style={{ width: `${data.todoStats.total > 0 ? (data.todoStats.completed / data.todoStats.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                  {data.todoStats.focusMinutes > 0 && (
+                    <div className="text-xs text-gray-500">
+                      タスク集中時間: {Math.floor(data.todoStats.focusMinutes / 60)}h{data.todoStats.focusMinutes % 60}m
+                    </div>
+                  )}
+                  <button
+                    onClick={() => insertAtCursor(`- タスク完了率：${data.todoStats.completed}/${data.todoStats.total}（${data.todoStats.total > 0 ? Math.round((data.todoStats.completed / data.todoStats.total) * 100) : 0}%）\n`)}
+                    className="mt-1 text-xs text-indigo-500 hover:text-indigo-700"
+                  >
+                    ➕ 挿入
+                  </button>
+                </div>
+              )}
+
               {/* 習慣成功率 */}
               <div className="rounded-lg border border-gray-200 p-3">
                 <h3 className="font-semibold text-sm text-gray-700 mb-2">✅ 習慣成功率（カテゴリ別）</h3>

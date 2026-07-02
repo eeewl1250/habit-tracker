@@ -15,6 +15,7 @@ import { DiaryView } from './components/DiaryView'
 import { HomeView } from './components/HomeView'
 import { ScheduleView } from './components/ScheduleView'
 import { ReviewCanvas } from './components/ReviewCanvas'
+import { TodoView } from './components/TodoView'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -107,6 +108,7 @@ function App() {
   const isDiary = dates.viewMode === 'diary'
   const isSchedule = dates.viewMode === 'schedule'
   const isReview = dates.viewMode === 'review'
+  const isTodo = dates.viewMode === 'todo'
 
   const focusDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
   useEffect(() => {
@@ -200,7 +202,7 @@ function App() {
           onViewModeChange={handleViewModeChange}
           managing={showManagement}
           onManage={handleManage}
-          hideDateNav={isHome || dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary || isSchedule || isReview}
+          hideDateNav={isHome || dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary || isSchedule || isReview || isTodo}
           dark={isDark}
         />
       )}
@@ -262,6 +264,8 @@ function App() {
             onUpdate={diary.update}
             onModeChange={setDiarySubMode}
           />
+          ) : isTodo ? (
+            <TodoView />
           ) : isReview ? (
             <ReviewCanvas />
           ) : isSleep ? (
@@ -344,7 +348,7 @@ function App() {
       </main>
       )}
 
-      {!showManagement && !isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && (
+      {!showManagement && !isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && !isTodo && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -353,7 +357,7 @@ function App() {
         </button>
       )}
 
-      {!isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && (
+      {!isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && !isTodo && (
         <>
           <Toast
             key={toast.key}

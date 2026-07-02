@@ -257,6 +257,42 @@ export interface DiaryEntry {
   updated_at: string
 }
 
+// ── Todo ──
+
+export type TodoStatus = 'backlog' | 'today' | 'done'
+export type TodoCategory = 'school' | 'job' | 'life' | 'ent' | 'study'
+
+export interface Todo {
+  id: string
+  title: string
+  category: TodoCategory
+  status: TodoStatus
+  estimated_minutes: number
+  actual_minutes: number
+  source_url: string | null
+  diary_clue: string | null
+  sort_order: number
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TodoFormData {
+  title: string
+  category: TodoCategory
+  status: TodoStatus
+  estimated_minutes?: number
+  source_url?: string
+}
+
+export const TODO_CATEGORIES: { key: TodoCategory; label: string; color: string; bg: string; emoji: string }[] = [
+  { key: 'job', label: '就活', color: '#EF4444', bg: '#FEE2E2', emoji: '🔴' },
+  { key: 'school', label: '学校', color: '#6B7280', bg: '#F3F4F6', emoji: '🔵' },
+  { key: 'life', label: '生活', color: '#3B82F6', bg: '#DBEAFE', emoji: '🟢' },
+  { key: 'ent', label: '娯楽', color: '#F97316', bg: '#FFEDD5', emoji: '🟣' },
+  { key: 'study', label: '学習', color: '#8B5CF6', bg: '#EDE9FE', emoji: '🟠' },
+]
+
 // ── Schedule ──
 
 export type ScheduleCategory = string
