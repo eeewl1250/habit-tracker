@@ -52,8 +52,6 @@ export function ScheduleEditor({ onSave, onCancel, scheduleId }: Props) {
     }).catch(() => {})
   }, [scheduleId])
 
-  const today = format(new Date(), 'yyyy-MM-dd')
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return

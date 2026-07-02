@@ -5,7 +5,7 @@ import {
   eachDayOfInterval, isToday, parse,
 } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import type { ScheduleCategory, ScheduleFormData, CategoryDef } from '../types'
+import type { ScheduleCategory, ScheduleFormData } from '../types'
 import { getScheduleCategories } from '../types'
 import { useSchedules } from '../hooks/useSchedules'
 import { ScheduleEditor } from './ScheduleEditor'
@@ -26,7 +26,7 @@ function getCategoryStyle(cat: ScheduleCategory) {
 const WEEKDAYS_JP = ['月', '火', '水', '木', '金', '土', '日']
 
 export function ScheduleView() {
-  const { schedules, load, add, edit, remove, excludeDate, getInstances } = useSchedules()
+  const { load, add, edit, remove, excludeDate, getInstances } = useSchedules()
   const [viewMode, setViewMode] = useState<ScheduleViewMode>('month')
   const [baseDate, setBaseDate] = useState(normalizeDate(new Date()))
   const cats = useMemo(() => getScheduleCategories(), [])
@@ -37,7 +37,7 @@ export function ScheduleView() {
   const [showAIParser, setShowAIParser] = useState(false)
   const [editing, setEditing] = useState<{ id: string; date?: string } | null>(null)
   const [showCategoryManager, setShowCategoryManager] = useState(false)
-  const [popoverTarget, setPopoverTarget] = useState<{ instance: ReturnType<typeof useSchedules> extends { getInstances(...args: unknown[]): infer R } ? R[number] : never; el: HTMLElement } | null>(null)
+  const [popoverTarget, setPopoverTarget] = useState<{ instance: any; el: HTMLElement } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; date: string; isRecurring: boolean } | null>(null)
   const [editRecurringChoice, setEditRecurringChoice] = useState<{ form: ScheduleFormData; id: string; date: string } | null>(null)
 
@@ -115,7 +115,7 @@ export function ScheduleView() {
     if (!editRecurringChoice) return
     const { form, id, date } = editRecurringChoice
     await excludeDate(id, date)
-    const created = await add({ ...form, date_start: date, is_recurring: false })
+    await add({ ...form, date_start: date, is_recurring: false })
     setEditRecurringChoice(null)
     setEditing(null)
     setShowEditor(false)
@@ -349,7 +349,7 @@ export function ScheduleView() {
 
 // ── Month View ──
 
-function MonthView({ baseDate, instances, filters, onEdit, onPopover, onNavigateToWeek }: ViewProps & { onNavigateToWeek?: (date: Date) => void }) {
+function MonthView({ baseDate, instances, onPopover, onNavigateToWeek }: ViewProps & { onNavigateToWeek?: (date: Date) => void }) {
   const monthStart = startOfMonth(baseDate)
   const monthEnd = endOfMonth(baseDate)
   const calStart = startOfWeek(monthStart, { weekStartsOn: 1 })
@@ -499,7 +499,7 @@ function MonthView({ baseDate, instances, filters, onEdit, onPopover, onNavigate
 const HOUR_HEIGHT = 48
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
-function WeekView({ baseDate, instances, filters, onEdit, onPopover, onNavigateToDay }: ViewProps & { onNavigateToDay?: (date: Date) => void }) {
+function WeekView({ baseDate, instances, onPopover, onNavigateToDay }: ViewProps & { onNavigateToDay?: (date: Date) => void }) {
   const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(baseDate, { weekStartsOn: 1 })
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd })
@@ -641,7 +641,7 @@ function WeekView({ baseDate, instances, filters, onEdit, onPopover, onNavigateT
 
 // ── Day View ──
 
-function DayView({ baseDate, instances, filters, onEdit, onPopover }: ViewProps) {
+function DayView({ instances, onPopover }: ViewProps) {
   const now = new Date()
   const currentMinutes = now.getHours() * 60 + now.getMinutes()
   const scrollRef = useRef<HTMLDivElement>(null)

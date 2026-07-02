@@ -136,7 +136,6 @@ export function Header({
   onToday,
   onViewModeChange,
   managing = false,
-  onManage = () => {},
   hideDateNav = false,
   dark = false,
 }: HeaderProps) {

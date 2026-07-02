@@ -215,7 +215,7 @@ function CodeBlockInner({ className, children, preCls, codeCls, compact, ...prop
 }
 
 function makeCodeRenderer(styles: MarkdownThemeStyles) {
-  return function Code({ className, children, ...props }: any) {
+  return function Code({ className, children }: any) {
     if (!className) {
       return <code className={styles.inlineCode}>{children}</code>
     }
@@ -265,7 +265,7 @@ export function buildMarkdownComponents(theme: MarkdownTheme): Components {
     ol: ({ children }) => <ol className={s.ol}>{children}</ol>,
     li: makeLiRenderer(s),
     blockquote: ({ children }) => <blockquote className={s.blockquote}>{children}</blockquote>,
-    code: ({ className, children, ...props }: any) => {
+    code: ({ className, children }: any) => {
       if (!className) return <code className={s.inlineCode}>{children}</code>
       return (
         <CodeBlockInner

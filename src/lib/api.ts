@@ -688,7 +688,7 @@ export async function updateSchedule(id: string, form: Partial<ScheduleFormData>
     if (form.is_recurring) {
       payload.rec_unit = form.rec_unit
       payload.rec_interval = form.rec_interval
-      payload.rec_days = form.rec_days.length > 0 ? JSON.stringify(form.rec_days) : null
+      payload.rec_days = (form.rec_days?.length ?? 0) > 0 ? JSON.stringify(form.rec_days) : null
       payload.rec_end_date = form.rec_end_date || null
     } else {
       payload.rec_unit = null

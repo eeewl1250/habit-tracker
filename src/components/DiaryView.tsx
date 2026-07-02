@@ -9,7 +9,7 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { diffChars } from 'diff'
 import { correctDiary } from '../lib/gemini'
-import { builtinThemes, getSavedThemeId, saveThemeId, getTheme, buildBlockComponents, buildMarkdownComponents } from '../lib/markdownThemes'
+import { getSavedThemeId, saveThemeId, getTheme, buildBlockComponents, buildMarkdownComponents } from '../lib/markdownThemes'
 import type { DiaryEntry } from '../types'
 
 export type DiarySubMode = 'calendar' | 'editor'
@@ -59,51 +59,6 @@ function DiffView({ original, corrected }: { original: string; corrected: string
   )
 }
 
-function splitIntoBlocks(text: string): string[] {
-  if (!text) return ['']
-  const lines = text.split('\n')
-  const blocks: string[] = []
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (line.trimStart().startsWith('```') || line.trimStart().startsWith('~~~')) {
-      const fenceLines: string[] = [line]
-      i++
-      while (i < lines.length) {
-        fenceLines.push(lines[i])
-        if (lines[i].trimStart().startsWith('```') || lines[i].trimStart().startsWith('~~~')) {
-          i++
-          break
-        }
-        i++
-      }
-      blocks.push(fenceLines.join('\n'))
-    } else if (/^\s*>/.test(line)) {
-      const quoteLines: string[] = [line]
-      i++
-      while (i < lines.length && /^\s*>/.test(lines[i])) {
-        quoteLines.push(lines[i])
-        i++
-      }
-      blocks.push(quoteLines.join('\n'))
-    } else if (/^\s*(?:[-*+]\s|\d+[.)]\s)/.test(line)) {
-      const listLines: string[] = [line]
-      i++
-      while (i < lines.length && /^\s*(?:[-*+]\s|\d+[.)]\s)/.test(lines[i])) {
-        listLines.push(lines[i])
-        i++
-      }
-      blocks.push(listLines.join('\n'))
-    } else if (/^\s*$/.test(line) && i > 0 && i < lines.length - 1) {
-      i++
-    } else {
-      blocks.push(line)
-      i++
-    }
-  }
-  return blocks
-}
-
 function DiaryEditor({
   dateStr,
   entry,
@@ -138,14 +93,7 @@ function DiaryEditor({
   const [showThemePicker, setShowThemePicker] = useState(false)
   const themeRef = useRef<HTMLDivElement>(null)
   const currentTheme = getTheme(themeId)
-  const blockComponents = useMemo(() => buildBlockComponents(currentTheme), [currentTheme])
   const markdownComponents = useMemo(() => buildMarkdownComponents(currentTheme), [currentTheme])
-
-  const switchTheme = useCallback((id: string) => {
-    setThemeId(id)
-    saveThemeId(id)
-    setShowThemePicker(false)
-  }, [])
 
   useEffect(() => {
     if (!showThemePicker) return
