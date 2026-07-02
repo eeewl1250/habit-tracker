@@ -9,17 +9,22 @@ function catInfo(cat: string) {
   return TODO_CATEGORIES.find(c => c.key === cat) ?? TODO_CATEGORIES[2]
 }
 
-interface TodoViewProps {
-  onNavigate?: (mode: string) => void
+interface EditForm {
+  title: string
+  category: TodoCategory
+  estimated_minutes: number
+  source_url: string
 }
 
-export function TodoView({ onNavigate }: TodoViewProps) {
+export function TodoView() {
   const [todos, setTodos] = useState<Todo[]>([])
   const [loading, setLoading] = useState(true)
 
   // Input states
   const [leftInput, setLeftInput] = useState('')
+  const [leftCat, setLeftCat] = useState<TodoCategory>('job')
   const [rightInput, setRightInput] = useState('')
+  const [rightCat, setRightCat] = useState<TodoCategory>('life')
   const [filterCat, setFilterCat] = useState<string>('all')
 
   // Timer state
@@ -27,6 +32,10 @@ export function TodoView({ onNavigate }: TodoViewProps) {
   const [timerElapsed, setTimerElapsed] = useState(0)
   const timerStartRef = useRef<number>(0)
   const timerIntervalRef = useRef<number | null>(null)
+
+  // Edit modal state
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({ title: '', category: 'life', estimated_minutes: 0, source_url: '' })
 
   const loadTodos = useCallback(async () => {
     setLoading(true)
@@ -42,12 +51,12 @@ export function TodoView({ onNavigate }: TodoViewProps) {
 
   useEffect(() => { loadTodos() }, [loadTodos])
 
-  const addTodo = useCallback(async (title: string, status: TodoStatus, category?: TodoCategory) => {
+  const addTodo = useCallback(async (title: string, status: TodoStatus, category: TodoCategory) => {
     if (!title.trim()) return
     try {
       const todo = await apiCreateTodo({
         title: title.trim(),
-        category: category ?? 'life',
+        category,
         status,
       })
       setTodos(prev => [todo, ...prev])
@@ -135,6 +144,27 @@ export function TodoView({ onNavigate }: TodoViewProps) {
     setTodos(prev => prev.filter(t => t.status !== 'done'))
   }, [todos, deleteTodo])
 
+  const openEdit = useCallback((todo: Todo) => {
+    setEditForm({
+      title: todo.title,
+      category: todo.category as TodoCategory,
+      estimated_minutes: todo.estimated_minutes,
+      source_url: todo.source_url || '',
+    })
+    setEditingTodo(todo)
+  }, [])
+
+  const saveEdit = useCallback(async () => {
+    if (!editingTodo || !editForm.title.trim()) return
+    await updateField(editingTodo.id, {
+      title: editForm.title.trim(),
+      category: editForm.category,
+      estimated_minutes: editForm.estimated_minutes,
+      source_url: editForm.source_url || null,
+    })
+    setEditingTodo(null)
+  }, [editingTodo, editForm, updateField])
+
   const todayTodos = todos.filter(t => t.status === 'today').sort((a, b) => a.sort_order - b.sort_order)
   const emptySlots = MAX_TODAY - todayTodos.length
   const doneCount = todos.filter(t => t.status === 'done').length
@@ -155,6 +185,19 @@ export function TodoView({ onNavigate }: TodoViewProps) {
     if (mins < 60) return `${mins}分`
     return `${Math.floor(mins / 60)}h${mins % 60 > 0 ? `${mins % 60}分` : ''}`
   }
+
+  // Category selector component
+  const CatSelect = ({ value, onChange }: { value: TodoCategory; onChange: (v: TodoCategory) => void }) => (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value as TodoCategory)}
+      className="text-xs border border-gray-200 rounded px-1 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400"
+    >
+      {TODO_CATEGORIES.map(c => (
+        <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
+      ))}
+    </select>
+  )
 
   return (
     <div className="flex flex-col h-[calc(100vh-56px)] bg-gray-50">
@@ -182,12 +225,13 @@ export function TodoView({ onNavigate }: TodoViewProps) {
 
           {/* Quick add */}
           <div className="flex gap-1 mb-4">
+            <CatSelect value={leftCat} onChange={setLeftCat} />
             <input
               value={leftInput}
               onChange={e => setLeftInput(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && leftInput.trim()) {
-                  addTodo(leftInput, 'today')
+                  addTodo(leftInput, 'today', leftCat)
                   setLeftInput('')
                 }
               }}
@@ -195,7 +239,7 @@ export function TodoView({ onNavigate }: TodoViewProps) {
               className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
             <button
-              onClick={() => { if (leftInput.trim()) { addTodo(leftInput, 'today'); setLeftInput('') } }}
+              onClick={() => { if (leftInput.trim()) { addTodo(leftInput, 'today', leftCat); setLeftInput('') } }}
               className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               追加
@@ -264,6 +308,15 @@ export function TodoView({ onNavigate }: TodoViewProps) {
                         ⏳ {elapsedFormatted}
                       </button>
 
+                      {/* Edit */}
+                      <button
+                        onClick={() => openEdit(todo)}
+                        className="px-1.5 py-1 text-xs text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                        title="編集"
+                      >
+                        ✏️
+                      </button>
+
                       {/* Source link */}
                       {todo.source_url && (
                         <a
@@ -317,12 +370,13 @@ export function TodoView({ onNavigate }: TodoViewProps) {
 
           {/* Quick collect */}
           <div className="flex gap-1 mb-4">
+            <CatSelect value={rightCat} onChange={setRightCat} />
             <input
               value={rightInput}
               onChange={e => setRightInput(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && rightInput.trim()) {
-                  addTodo(rightInput, 'backlog')
+                  addTodo(rightInput, 'backlog', rightCat)
                   setRightInput('')
                 }
               }}
@@ -330,7 +384,7 @@ export function TodoView({ onNavigate }: TodoViewProps) {
               className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
             <button
-              onClick={() => { if (rightInput.trim()) { addTodo(rightInput, 'backlog'); setRightInput('') } }}
+              onClick={() => { if (rightInput.trim()) { addTodo(rightInput, 'backlog', rightCat); setRightInput('') } }}
               className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               収集
@@ -340,7 +394,7 @@ export function TodoView({ onNavigate }: TodoViewProps) {
           {/* Category filter chips */}
           <div className="flex flex-wrap gap-1 mb-3">
             {[
-              { key: 'all', label: 'すべて', color: '', bg: '' },
+              { key: 'all', label: 'すべて', color: '#6B7280', bg: '' },
               ...TODO_CATEGORIES,
             ].map(cat => (
               <button
@@ -380,6 +434,15 @@ export function TodoView({ onNavigate }: TodoViewProps) {
                   {/* Category label */}
                   <span className="text-[10px] text-gray-400 hidden sm:block">{cat.emoji}{cat.label}</span>
 
+                  {/* Edit */}
+                  <button
+                    onClick={() => openEdit(todo)}
+                    className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
+                    title="編集"
+                  >
+                    ✏️
+                  </button>
+
                   {/* Move to today */}
                   <button
                     onClick={() => moveToToday(todo.id)}
@@ -403,6 +466,82 @@ export function TodoView({ onNavigate }: TodoViewProps) {
           </div>
         </div>
       </div>
+
+      {/* ── Edit Modal ── */}
+      {editingTodo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEditingTodo(null)}>
+          <div className="bg-white rounded-xl p-5 w-full max-w-sm mx-3 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-gray-800 mb-4">✏️ タスクを編集</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">タイトル</label>
+                <input
+                  value={editForm.title}
+                  onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">カテゴリ</label>
+                <select
+                  value={editForm.category}
+                  onChange={e => setEditForm(f => ({ ...f, category: e.target.value as TodoCategory }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+                >
+                  {TODO_CATEGORIES.map(c => (
+                    <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-gray-500 mb-1 block">見積時間（分）</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editForm.estimated_minutes}
+                    onChange={e => setEditForm(f => ({ ...f, estimated_minutes: Math.max(0, parseInt(e.target.value) || 0) }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-gray-500 mb-1 block">実績時間</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editingTodo.actual_minutes}
+                    onChange={e => updateField(editingTodo.id, { actual_minutes: Math.max(0, parseInt(e.target.value) || 0) })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">ソースURL（任意）</label>
+                <input
+                  value={editForm.source_url}
+                  onChange={e => setEditForm(f => ({ ...f, source_url: e.target.value }))}
+                  placeholder="https://..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setEditingTodo(null)}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={saveEdit}
+                className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
