@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, differenceInMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import type { TimeLog, TimeCategory } from '../types'
-import { TIME_CATEGORIES, TIME_BONUS_RATE } from '../types'
+import type { TimeLog, TimeCategory, CategoryDefinition } from '../types'
+import { TIME_CATEGORIES } from '../types'
+import { fetchCategoryDefinitions } from '../lib/api'
 import type { useTimeLogs } from '../hooks/useTimeLogs'
 
 interface FocusViewProps {
@@ -547,8 +548,18 @@ function Analytics({ logs, baseDate }: { logs: TimeLog[]; baseDate: Date }) {
 
 export function FocusView({ timeLogs, baseDate, onGoToFinance }: FocusViewProps) {
   const [showSummary, setShowSummary] = useState<TimeLog | null>(null)
+  const [catDefs, setCatDefs] = useState<CategoryDefinition[]>([])
 
   const activeLog = timeLogs.getActiveTimer()
+
+  useEffect(() => {
+    fetchCategoryDefinitions().then(setCatDefs).catch(() => {})
+  }, [])
+
+  const bonusRate = useMemo(() => {
+    const enabled = catDefs.find(c => c.bonus_enabled && c.bonus_rate > 0)
+    return enabled?.bonus_rate ?? 0
+  }, [catDefs])
 
   const todayBonus = useMemo(() => {
     const today = format(new Date(), 'yyyy-MM-dd')
@@ -558,8 +569,8 @@ export function FocusView({ timeLogs, baseDate, onGoToFinance }: FocusViewProps)
         minutes += l.duration
       }
     }
-    return Math.floor((minutes / 60) * TIME_BONUS_RATE)
-  }, [timeLogs.logs])
+    return Math.floor((minutes / 60) * bonusRate)
+  }, [timeLogs.logs, bonusRate])
 
   const handleStart = useCallback(async (cat: TimeCategory) => {
     await timeLogs.startTimer(cat)

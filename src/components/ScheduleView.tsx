@@ -5,12 +5,12 @@ import {
   eachDayOfInterval, isToday, parse,
 } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import type { ScheduleCategory, ScheduleFormData } from '../types'
+import type { ScheduleCategory, ScheduleFormData, CategoryDefinition } from '../types'
 import { getScheduleCategories } from '../types'
+import { fetchCategoryDefinitions } from '../lib/api'
 import { useSchedules } from '../hooks/useSchedules'
 import { ScheduleEditor } from './ScheduleEditor'
 import { SchedulePopover } from './SchedulePopover'
-import { CategoryManager } from './CategoryManager'
 import { ScheduleAIParser } from './ScheduleAIParser'
 
 type ScheduleViewMode = 'month' | 'week' | 'day'
@@ -19,24 +19,39 @@ function normalizeDate(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-function getCategoryStyle(cat: ScheduleCategory) {
-  return getScheduleCategories().find((c) => c.key === cat)!
+const LOCAL_FALLBACK = getScheduleCategories()
+
+function getCategoryStyle(cat: ScheduleCategory, apiCats?: CategoryDefinition[]) {
+  if (apiCats) {
+    const found = apiCats.find((c) => c.name === cat)
+    if (found) return { key: found.name, label: found.name, color: found.color, bg: found.bg_color }
+  }
+  return LOCAL_FALLBACK.find((c) => c.key === cat) ?? LOCAL_FALLBACK.find((c) => c.label === cat) ?? LOCAL_FALLBACK[0]
 }
 
 const WEEKDAYS_JP = ['月', '火', '水', '木', '金', '土', '日']
 
-export function ScheduleView() {
+export function ScheduleView({ onNavigateToCategories }: { onNavigateToCategories?: () => void }) {
   const { load, add, edit, remove, excludeDate, getInstances } = useSchedules()
   const [viewMode, setViewMode] = useState<ScheduleViewMode>('month')
   const [baseDate, setBaseDate] = useState(normalizeDate(new Date()))
-  const cats = useMemo(() => getScheduleCategories(), [])
+  const [apiCats, setApiCats] = useState<CategoryDefinition[]>([])
+  const cats = useMemo(() => {
+    if (apiCats.length > 0) {
+      return apiCats.map((c) => ({ key: c.name, label: c.name, color: c.color, bg: c.bg_color }))
+    }
+    return getScheduleCategories()
+  }, [apiCats])
   const [filters, setFilters] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(cats.map((c) => [c.key, true]))
   )
+
+  useEffect(() => {
+    fetchCategoryDefinitions().then(setApiCats).catch(() => {})
+  }, [])
   const [showEditor, setShowEditor] = useState(false)
   const [showAIParser, setShowAIParser] = useState(false)
   const [editing, setEditing] = useState<{ id: string; date?: string } | null>(null)
-  const [showCategoryManager, setShowCategoryManager] = useState(false)
   const [popoverTarget, setPopoverTarget] = useState<{ instance: any; el: HTMLElement } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; date: string; isRecurring: boolean } | null>(null)
   const [editRecurringChoice, setEditRecurringChoice] = useState<{ form: ScheduleFormData; id: string; date: string } | null>(null)
@@ -49,14 +64,14 @@ export function ScheduleView() {
 
   useEffect(() => {
     // refresh filters when categories change
-    const currentCats = getScheduleCategories()
     setFilters((prev) => {
+      const currentCats = cats
       const next = { ...prev }
       for (const c of currentCats) if (!(c.key in next)) next[c.key] = true
       for (const k of Object.keys(next)) if (!currentCats.some((c) => c.key === k)) delete next[k]
       return next
     })
-  }, [showCategoryManager])
+  }, [cats])
 
   const dateRange = useMemo(() => {
     if (viewMode === 'month') {
@@ -195,13 +210,13 @@ export function ScheduleView() {
               {cat.label}
             </button>
           ))}
-          <button
-            onClick={() => setShowCategoryManager(true)}
-            className="px-3 py-1 text-xs rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50"
-            title="カテゴリ管理"
-          >
-            ⚙
-          </button>
+        <button
+          onClick={() => onNavigateToCategories?.()}
+          className="px-3 py-1 text-xs rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50"
+          title="カテゴリ管理"
+        >
+          ⚙
+        </button>
         </div>
       </div>
 
@@ -212,6 +227,7 @@ export function ScheduleView() {
         <MonthView
           baseDate={baseDate}
           instances={instances}
+          apiCats={apiCats}
           filters={filters}
           onEdit={(id) => { setEditing({ id }); setShowEditor(true) }}
           onPopover={(inst, el) => setPopoverTarget({ instance: inst, el })}
@@ -222,6 +238,7 @@ export function ScheduleView() {
         <WeekView
           baseDate={baseDate}
           instances={instances}
+          apiCats={apiCats}
           filters={filters}
           onEdit={(id) => { setEditing({ id }); setShowEditor(true) }}
           onPopover={(inst, el) => setPopoverTarget({ instance: inst, el })}
@@ -232,6 +249,7 @@ export function ScheduleView() {
           <DayView
             baseDate={baseDate}
             instances={instances}
+            apiCats={apiCats}
             filters={filters}
             onEdit={(id) => { setEditing({ id }); setShowEditor(true) }}
             onPopover={(inst, el) => setPopoverTarget({ instance: inst, el })}
@@ -274,10 +292,6 @@ export function ScheduleView() {
           onSave={handleSaveAI}
           onClose={() => setShowAIParser(false)}
         />
-      )}
-
-      {showCategoryManager && (
-        <CategoryManager onClose={() => setShowCategoryManager(false)} />
       )}
 
       {deleteTarget && (
@@ -349,7 +363,7 @@ export function ScheduleView() {
 
 // ── Month View ──
 
-function MonthView({ baseDate, instances, onPopover, onNavigateToWeek }: ViewProps & { onNavigateToWeek?: (date: Date) => void }) {
+function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }: ViewProps & { onNavigateToWeek?: (date: Date) => void }) {
   const monthStart = startOfMonth(baseDate)
   const monthEnd = endOfMonth(baseDate)
   const calStart = startOfWeek(monthStart, { weekStartsOn: 1 })
@@ -411,8 +425,8 @@ function MonthView({ baseDate, instances, onPopover, onNavigateToWeek }: ViewPro
                     <div
                       className="text-xs rounded px-1 py-0.5 truncate"
                       style={{
-                        backgroundColor: getCategoryStyle(inst.category).bg,
-                        borderLeft: `3px solid ${getCategoryStyle(inst.category).color}`,
+                        backgroundColor: getCategoryStyle(inst.category, apiCats).bg,
+                        borderLeft: `3px solid ${getCategoryStyle(inst.category, apiCats).color}`,
                       }}
                     >
                       {inst.time_start && <span className="text-slate-400 mr-0.5">{inst.time_start.slice(0, 5)}</span>}
@@ -466,7 +480,7 @@ function MonthView({ baseDate, instances, onPopover, onNavigateToWeek }: ViewPro
                         <span
                           key={cat}
                           className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: getCategoryStyle(cat).color }}
+                          style={{ backgroundColor: getCategoryStyle(cat, apiCats).color }}
                         />
                       ))}
                     </div>
@@ -485,7 +499,7 @@ function MonthView({ baseDate, instances, onPopover, onNavigateToWeek }: ViewPro
               <div className="text-sm text-slate-400">予定なし</div>
             )}
             {dayInstances.map((inst) => (
-              <ScheduleListItem key={inst.id} inst={inst} onPopover={onPopover} />
+              <ScheduleListItem key={inst.id} inst={inst} apiCats={apiCats} onPopover={onPopover} />
             ))}
           </div>
         )}
@@ -499,7 +513,7 @@ function MonthView({ baseDate, instances, onPopover, onNavigateToWeek }: ViewPro
 const HOUR_HEIGHT = 48
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
-function WeekView({ baseDate, instances, onPopover, onNavigateToDay }: ViewProps & { onNavigateToDay?: (date: Date) => void }) {
+function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: ViewProps & { onNavigateToDay?: (date: Date) => void }) {
   const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(baseDate, { weekStartsOn: 1 })
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd })
@@ -536,8 +550,8 @@ function WeekView({ baseDate, instances, onPopover, onNavigateToDay }: ViewProps
                         onClick={(e) => onPopover(inst, e.currentTarget)}
                         className="w-full text-left text-xs rounded px-1 py-0.5 truncate mb-0.5"
                         style={{
-                          backgroundColor: getCategoryStyle(inst.category).bg,
-                          borderLeft: `3px solid ${getCategoryStyle(inst.category).color}`,
+                          backgroundColor: getCategoryStyle(inst.category, apiCats).bg,
+                          borderLeft: `3px solid ${getCategoryStyle(inst.category, apiCats).color}`,
                         }}
                       >
                         {inst.title}
@@ -597,7 +611,7 @@ function WeekView({ baseDate, instances, onPopover, onNavigateToDay }: ViewProps
                     const [eh] = (inst.time_end ?? inst.time_start)!.split(':').map(Number)
                     const top = sh * HOUR_HEIGHT
                     const height = Math.max((eh - sh) * HOUR_HEIGHT, 24)
-                    const cat = getCategoryStyle(inst.category)
+                    const cat = getCategoryStyle(inst.category, apiCats)
                     return (
                       <button
                         key={inst.id}
@@ -641,7 +655,7 @@ function WeekView({ baseDate, instances, onPopover, onNavigateToDay }: ViewProps
 
 // ── Day View ──
 
-function DayView({ instances, onPopover }: ViewProps) {
+function DayView({ instances, apiCats, onPopover }: ViewProps) {
   const now = new Date()
   const currentMinutes = now.getHours() * 60 + now.getMinutes()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -667,8 +681,8 @@ function DayView({ instances, onPopover }: ViewProps) {
               onClick={(e) => onPopover(inst, e.currentTarget)}
               className="w-full text-left text-sm rounded px-2 py-1 mb-0.5"
               style={{
-                backgroundColor: getCategoryStyle(inst.category).bg,
-                borderLeft: `3px solid ${getCategoryStyle(inst.category).color}`,
+                backgroundColor: getCategoryStyle(inst.category, apiCats).bg,
+                borderLeft: `3px solid ${getCategoryStyle(inst.category, apiCats).color}`,
               }}
             >
               {inst.title}
@@ -696,7 +710,7 @@ function DayView({ instances, onPopover }: ViewProps) {
               const [eh, em] = (inst.time_end ?? inst.time_start)!.split(':').map(Number)
               const top = sh * HOUR_HEIGHT + (sm / 60) * HOUR_HEIGHT
               const height = Math.max((eh - sh) * HOUR_HEIGHT + ((em - sm) / 60) * HOUR_HEIGHT, 24)
-              const cat = getCategoryStyle(inst.category)
+              const cat = getCategoryStyle(inst.category, apiCats)
               return (
                 <button
                   key={inst.id}
@@ -735,8 +749,8 @@ function DayView({ instances, onPopover }: ViewProps) {
 
 // ── Schedule List Item (mobile) ──
 
-function ScheduleListItem({ inst, onPopover }: { inst: any; onPopover: (inst: any, el: HTMLElement) => void }) {
-  const cat = getCategoryStyle(inst.category)
+function ScheduleListItem({ inst, apiCats, onPopover }: { inst: any; apiCats: CategoryDefinition[]; onPopover: (inst: any, el: HTMLElement) => void }) {
+  const cat = getCategoryStyle(inst.category, apiCats)
   return (
     <button
       onClick={(e) => onPopover(inst, e.currentTarget)}
@@ -757,6 +771,7 @@ function ScheduleListItem({ inst, onPopover }: { inst: any; onPopover: (inst: an
 interface ViewProps {
   baseDate: Date
   instances: any[]
+  apiCats: CategoryDefinition[]
   filters: Record<ScheduleCategory, boolean>
   onEdit: (id: string) => void
   onPopover: (instance: any, el: HTMLElement) => void

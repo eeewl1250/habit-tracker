@@ -1,12 +1,25 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import type { Todo, TodoCategory, TodoStatus } from '../types'
-import { TODO_CATEGORIES } from '../types'
-import { fetchTodos, createTodo as apiCreateTodo, updateTodo as apiUpdateTodo, deleteTodo as apiDeleteTodo } from '../lib/api'
+import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, differenceInMinutes } from 'date-fns'
+import { ja } from 'date-fns/locale'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import type { Todo, TodoCategory, TodoStatus, TimeLog, TimeCategory, CategoryDefinition } from '../types'
+import { TIME_CATEGORIES, TIME_BONUS_RATE } from '../types'
+import { fetchTodos, fetchCategoryDefinitions, createTodo as apiCreateTodo, updateTodo as apiUpdateTodo, deleteTodo as apiDeleteTodo, createTimeLog, fetchTimeLogs, updateTimeLog, deleteTimeLog } from '../lib/api'
+import { CatIcon } from './Icon'
 
 const MAX_TODAY = 5
 
-function catInfo(cat: string) {
-  return TODO_CATEGORIES.find(c => c.key === cat) ?? TODO_CATEGORIES[2]
+const COLORS: Record<TimeCategory, string> = { job_hunting: '#3B82F6', self_growth: '#10B981' }
+const LABELS: Record<TimeCategory, string> = { job_hunting: '就職活動', self_growth: '自己投資' }
+
+function categoryToTimeCat(catName: string, catDefs: CategoryDefinition[]): TimeCategory {
+  const def = catDefs.find(c => c.name === catName)
+  if (def?.bonus_enabled && def.bonus_rate > 0) return 'job_hunting'
+  return 'self_growth'
+}
+
+function catInfo(catName: string, catDefs: CategoryDefinition[]) {
+  return catDefs.find(c => c.name === catName) ?? catDefs[catDefs.length - 1]
 }
 
 interface EditForm {
@@ -17,22 +30,379 @@ interface EditForm {
   source_url: string
 }
 
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return h > 0 ? `${h}時間${m}分` : `${m}分`
+}
+
+interface SummaryModalProps {
+  todo: Todo
+  catDefs: CategoryDefinition[]
+  elapsedMinutes: number
+  onSave: (summary: string) => void
+  onSkip: () => void
+}
+
+function SummaryModal({ todo, catDefs, elapsedMinutes, onSave, onSkip }: SummaryModalProps) {
+  const [summary, setSummary] = useState('')
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const cat = catInfo(todo.category, catDefs)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-30 p-4" onClick={onSkip}>
+      <div
+        className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm" style={{ backgroundColor: cat.color + '20' }}>
+            <CatIcon name={cat.emoji} />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-gray-800">{todo.title}</div>
+            <div className="text-xs text-gray-500">
+              {cat.label} · {formatDuration(elapsedMinutes)}
+            </div>
+          </div>
+        </div>
+        <textarea
+          ref={inputRef}
+          value={summary}
+          onChange={e => setSummary(e.target.value)}
+          placeholder="この時間にやったことを書こう..."
+          className="w-full h-24 px-3 py-2 border border-gray-300 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+        <div className="flex gap-2 mt-3">
+          <button onClick={onSkip} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+            スキップ
+          </button>
+          <button onClick={() => onSave(summary)} className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors">
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TimelineItem({ log, onEditSummary, onEditCategory, onEditTimes, onDelete }: {
+  log: TimeLog
+  onEditSummary: (id: string, summary: string) => void
+  onEditCategory: (id: string, category: string) => void
+  onEditTimes: (id: string, start: string, end: string) => void
+  onDelete: (id: string) => void
+}) {
+  const cat = log.category as TimeCategory
+  const start = new Date(log.start_time)
+  const end = log.end_time ? new Date(log.end_time) : null
+  const duration = end ? differenceInMinutes(end, start) : 0
+  const [editing, setEditing] = useState(false)
+  const [editSummary, setEditSummary] = useState(log.summary ?? '')
+  const [editCategory, setEditCategory] = useState<TimeCategory>(cat)
+  const [editStart, setEditStart] = useState(format(start, 'HH:mm'))
+  const [editEnd, setEditEnd] = useState(end ? format(end, 'HH:mm') : '')
+  const [editingTime, setEditingTime] = useState(false)
+
+  const handleSave = () => {
+    onEditSummary(log.id, editSummary)
+    if (editCategory !== cat) {
+      onEditCategory(log.id, editCategory)
+    }
+    setEditing(false)
+  }
+
+  const handleSaveTime = () => {
+    const [h1, m1] = editStart.split(':').map(Number)
+    const [h2, m2] = editEnd.split(':').map(Number)
+    const sy = start.getFullYear()
+    const sM = start.getMonth()
+    const sd = start.getDate()
+    onEditTimes(log.id,
+      new Date(sy, sM, sd, h1, m1).toISOString(),
+      new Date(sy, sM, sd, h2, m2).toISOString()
+    )
+    setEditingTime(false)
+  }
+
+  return (
+    <div className="flex items-start gap-2 px-1">
+      <div className="flex flex-col items-center pt-1">
+        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[cat] }} />
+        <div className="w-0.5 h-full min-h-[2rem] bg-gray-200" />
+      </div>
+      <div className="flex-1 min-w-0 pb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-500 whitespace-nowrap">
+            {format(start, 'HH:mm')} ~ {end ? format(end, 'HH:mm') : '--:--'}
+          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: COLORS[cat] + '20', color: COLORS[cat] }}>
+            {LABELS[cat]}
+          </span>
+          <span className="text-[10px] text-gray-400">{formatDuration(duration)}</span>
+          <button onClick={() => setEditing(!editing)} className="ml-auto text-gray-300 hover:text-gray-500 text-xs">
+            {editing ? '✕' : '📝'}
+          </button>
+        </div>
+
+        {editing ? (
+          <div className="mt-1 space-y-1.5">
+            <textarea
+              value={editSummary}
+              onChange={e => setEditSummary(e.target.value)}
+              className="w-full px-2 py-1 border border-gray-300 rounded text-xs resize-none h-14"
+              placeholder="まとめを入力..."
+            />
+            <div>
+              <div className="text-[10px] text-gray-400 mb-0.5">カテゴリ</div>
+              <div className="flex gap-1">
+                {(['job_hunting', 'self_growth'] as TimeCategory[]).map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setEditCategory(c)}
+                    className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${
+                      editCategory === c
+                        ? 'font-medium text-white border-transparent'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                    }`}
+                    style={editCategory === c ? { backgroundColor: COLORS[c] } : undefined}
+                  >
+                    {LABELS[c]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-1">
+              {!editingTime ? (
+                <>
+                  <button onClick={handleSave} className="px-3 py-1 bg-blue-600 text-white rounded text-[10px] font-medium hover:bg-blue-700">
+                    保存
+                  </button>
+                  <button onClick={() => setEditingTime(true)} className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-[10px] hover:bg-gray-200">
+                    時間を編集
+                  </button>
+                  <button onClick={() => onDelete(log.id)} className="px-3 py-1 bg-red-50 text-red-500 rounded text-[10px] hover:bg-red-100">
+                    削除
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
+                    className="w-20 px-1 py-1 border border-gray-300 rounded text-[10px]" />
+                  <span className="text-[10px] text-gray-400 self-center">~</span>
+                  <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
+                    className="w-20 px-1 py-1 border border-gray-300 rounded text-[10px]" />
+                  <button onClick={handleSaveTime} className="px-2 py-1 bg-blue-600 text-white rounded text-[10px]">保存</button>
+                  <button onClick={() => setEditingTime(false)} className="px-2 py-1 text-gray-500 text-[10px]">戻る</button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          log.summary && <div className="text-xs text-gray-600 mt-0.5 leading-relaxed">{log.summary}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Timeline({ logs, onEditSummary, onEditCategory, onEditTimes, onDelete }: {
+  logs: TimeLog[]
+  onEditSummary: (id: string, summary: string) => void
+  onEditCategory: (id: string, category: string) => void
+  onEditTimes: (id: string, start: string, end: string) => void
+  onDelete: (id: string) => void
+}) {
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const todayLogs = logs.filter(l => l.start_time.startsWith(today) && l.end_time).sort(
+    (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+  )
+
+  if (todayLogs.length === 0) {
+    return <p className="text-center text-gray-400 py-4 text-xs">今日の記録はまだありません</p>
+  }
+
+  return (
+    <div className="space-y-1">
+      {todayLogs.map((log) => (
+        <TimelineItem
+          key={log.id}
+          log={log}
+          onEditSummary={onEditSummary}
+          onEditCategory={onEditCategory}
+          onEditTimes={onEditTimes}
+          onDelete={onDelete}
+        />
+      ))}
+    </div>
+  )
+}
+
+function Analytics({ logs, baseDate }: { logs: TimeLog[]; baseDate: Date }) {
+  const [period, setPeriod] = useState<'week' | 'month'>('week')
+
+  const { dateRange, days } = (() => {
+    const start = period === 'week' ? startOfWeek(baseDate, { weekStartsOn: 1 }) : startOfMonth(baseDate)
+    const end = period === 'week' ? endOfWeek(baseDate, { weekStartsOn: 1 }) : endOfMonth(baseDate)
+    const days = eachDayOfInterval({ start, end })
+    return { dateRange: { start, end }, days }
+  })()
+
+  const periodLogs = (() => {
+    const startStr = format(dateRange.start, 'yyyy-MM-dd')
+    const endStr = format(dateRange.end, 'yyyy-MM-dd')
+    return logs.filter((l) => {
+      if (!l.end_time) return false
+      const d = format(new Date(l.start_time), 'yyyy-MM-dd')
+      return d >= startStr && d <= endStr
+    })
+  })()
+
+  const dailyTotals = (() => {
+    const map = new Map<string, { job: number; growth: number }>()
+    for (const d of days) {
+      map.set(format(d, 'yyyy-MM-dd'), { job: 0, growth: 0 })
+    }
+    for (const l of periodLogs) {
+      if (!l.end_time || l.duration === null) continue
+      const day = format(new Date(l.start_time), 'yyyy-MM-dd')
+      const entry = map.get(day)
+      if (entry) {
+        if (l.category === 'job_hunting') entry.job += Math.round(l.duration / 60 * 10) / 10
+        else entry.growth += Math.round(l.duration / 60 * 10) / 10
+      }
+    }
+    return Array.from(map.entries()).map(([date, v]) => ({
+      date: format(parseISO(date), period === 'week' ? 'EE' : 'M/d', { locale: ja }),
+      fullDate: date,
+      job: v.job,
+      growth: v.growth,
+      total: Math.round((v.job + v.growth) * 10) / 10,
+    }))
+  })()
+
+  const totalHours = (() => {
+    let job = 0, growth = 0
+    for (const l of periodLogs) {
+      if (l.duration === null) continue
+      if (l.category === 'job_hunting') job += l.duration
+      else growth += l.duration
+    }
+    return { job: Math.round(job / 60 * 10) / 10, growth: Math.round(growth / 60 * 10) / 10 }
+  })()
+
+  const dailyAvg = days.length > 0 ? Math.round(((totalHours.job + totalHours.growth) / days.length) * 10) / 10 : 0
+  const totalAll = totalHours.job + totalHours.growth
+  const ratioJob = totalAll > 0 ? Math.round((totalHours.job / totalAll) * 100) : 0
+
+  const pieData = [
+    { name: '就職活動', value: totalHours.job, color: COLORS.job_hunting },
+    { name: '自己投資', value: totalHours.growth, color: COLORS.self_growth },
+  ].filter(d => d.value > 0)
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3 mt-2">
+        <div className="ml-auto flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+          <button onClick={() => setPeriod('week')}
+            className={`px-3 py-1.5 transition-colors ${period === 'week' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            週
+          </button>
+          <button onClick={() => setPeriod('month')}
+            className={`px-3 py-1.5 transition-colors ${period === 'month' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            月
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-2.5 text-center">
+          <div className="text-base font-bold text-gray-800">{totalAll.toFixed(1)}</div>
+          <div className="text-[10px] text-gray-500">総時間(h)</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-2.5 text-center">
+          <div className="text-base font-bold text-gray-800">{dailyAvg.toFixed(1)}</div>
+          <div className="text-[10px] text-gray-500">日平均(h)</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-2.5 text-center">
+          <div className="text-base font-bold text-gray-800">{ratioJob}%</div>
+          <div className="text-[10px] text-gray-500">就活比率</div>
+        </div>
+      </div>
+
+      {dailyTotals.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-3 mb-3">
+          <div className="text-xs font-medium text-gray-500 mb-2">時間推移</div>
+          <ResponsiveContainer width="100%" height={130}>
+            <LineChart data={dailyTotals}>
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 9 }} unit="h" />
+              <Tooltip formatter={(value) => typeof value === 'number' ? [`${value.toFixed(1)}h`, ''] : ['', '']} contentStyle={{ fontSize: 11 }} />
+              <Line type="monotone" dataKey="job" stroke={COLORS.job_hunting} strokeWidth={2} dot={{ r: 2 }} name="就職" />
+              <Line type="monotone" dataKey="growth" stroke={COLORS.self_growth} strokeWidth={2} dot={{ r: 2 }} name="自己投資" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {pieData.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-3">
+          <div className="text-xs font-medium text-gray-500 mb-2">割合</div>
+          <ResponsiveContainer width="100%" height={130}>
+            <PieChart>
+              <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={45} innerRadius={25}>
+                {pieData.map((_, i) => (
+                  <Cell key={i} fill={pieData[i].color} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => typeof value === 'number' ? [`${value.toFixed(1)}h`, ''] : ['', '']} contentStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex justify-center gap-3 text-[10px]">
+            {pieData.map(d => (
+              <div key={d.name} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />
+                <span className="text-gray-600">{d.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function TodoView() {
+  const [catDefs, setCatDefs] = useState<CategoryDefinition[]>([])
   const [todos, setTodos] = useState<Todo[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Input states
+  // Input states (default to first non-default category)
+  const defaultCat = catDefs.find(c => !c.is_default)
   const [leftInput, setLeftInput] = useState('')
-  const [leftCat, setLeftCat] = useState<TodoCategory>('job')
+  const [leftCat, setLeftCat] = useState<TodoCategory>(defaultCat?.name ?? '就活')
   const [rightInput, setRightInput] = useState('')
-  const [rightCat, setRightCat] = useState<TodoCategory>('life')
+  const [rightCat, setRightCat] = useState<TodoCategory>(defaultCat?.name ?? '生活')
   const [filterCat, setFilterCat] = useState<string>('all')
 
   // Timer state
   const [activeTimer, setActiveTimer] = useState<string | null>(null)
   const [timerElapsed, setTimerElapsed] = useState(0)
   const timerStartRef = useRef<number>(0)
+  const timerStartISORef = useRef<string | null>(null)
   const timerIntervalRef = useRef<number | null>(null)
+
+  // Summary modal state
+  const [summaryModal, setSummaryModal] = useState<{
+    taskId: string; minutes: number; startTime: string
+  } | null>(null)
+
+  // Time logs state
+  const [timeLogs, setTimeLogs] = useState<TimeLog[]>([])
 
   // Edit modal state
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
@@ -51,6 +421,24 @@ export function TodoView() {
   }, [])
 
   useEffect(() => { loadTodos() }, [loadTodos])
+
+  const loadTimeLogs = useCallback(async () => {
+    try {
+      const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
+      const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
+      const data = await fetchTimeLogs(start, end)
+      setTimeLogs(data)
+    } catch (e) {
+      console.error('Failed to load time logs', e)
+    }
+  }, [])
+
+  useEffect(() => { loadTimeLogs() }, [loadTimeLogs])
+
+  // Load category definitions
+  useEffect(() => {
+    fetchCategoryDefinitions().then(setCatDefs).catch(() => {})
+  }, [])
 
   const addTodo = useCallback(async (title: string, status: TodoStatus, category: TodoCategory) => {
     if (!title.trim()) return
@@ -109,14 +497,20 @@ export function TodoView() {
 
   const startTimer = useCallback((id: string) => {
     if (activeTimer === id) {
+      // Stop same task: record elapsed, show summary modal
       const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000)
       const minutes = Math.max(1, Math.round(elapsed / 60))
-      updateField(id, { actual_minutes: (todos.find(t => t.id === id)?.actual_minutes ?? 0) + minutes })
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
       setActiveTimer(null)
       setTimerElapsed(0)
+      setSummaryModal({
+        taskId: id,
+        minutes,
+        startTime: timerStartISORef.current ?? new Date().toISOString(),
+      })
       return
     }
+    // Switching to a different task: save previous timer immediately (no modal)
     if (activeTimer) {
       const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000)
       const minutes = Math.max(1, Math.round(elapsed / 60))
@@ -124,12 +518,80 @@ export function TodoView() {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
     }
     timerStartRef.current = Date.now()
+    timerStartISORef.current = new Date().toISOString()
     setActiveTimer(id)
     setTimerElapsed(0)
     timerIntervalRef.current = window.setInterval(() => {
       setTimerElapsed(Math.floor((Date.now() - timerStartRef.current) / 1000))
     }, 1000)
   }, [activeTimer, todos, updateField])
+
+  const handleTimerSummarySave = useCallback(async (summary: string) => {
+    if (!summaryModal) return
+    const { taskId, minutes, startTime } = summaryModal
+    const endTime = new Date().toISOString()
+    const todo = todos.find(t => t.id === taskId)
+    // Update actual_minutes
+    await updateField(taskId, {
+      actual_minutes: (todos.find(t => t.id === taskId)?.actual_minutes ?? 0) + minutes,
+    })
+    // Create time_log
+    if (todo) {
+      try {
+        await createTimeLog({
+          category: categoryToTimeCat(todo.category, catDefs),
+          start_time: startTime,
+          end_time: endTime,
+          summary: summary || null,
+          tags: null,
+        })
+        loadTimeLogs()
+      } catch (e) {
+        console.error('Failed to create time log', e)
+      }
+    }
+    setSummaryModal(null)
+  }, [summaryModal, todos, updateField, loadTimeLogs])
+
+  const handleTimerSummarySkip = useCallback(async () => {
+    await handleTimerSummarySave('')
+  }, [handleTimerSummarySave])
+
+  const handleTimeLogEdit = useCallback(async (id: string, updates: Partial<{ end_time: string | null; start_time: string | null; summary: string | null; category: string }>) => {
+    try {
+      await updateTimeLog(id, updates)
+      setTimeLogs(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l))
+    } catch (e) {
+      console.error('Failed to update time log', e)
+    }
+  }, [])
+
+  const handleTimeLogDelete = useCallback(async (id: string) => {
+    try {
+      await deleteTimeLog(id)
+      setTimeLogs(prev => prev.filter(l => l.id !== id))
+    } catch (e) {
+      console.error('Failed to delete time log', e)
+    }
+  }, [])
+
+  const handleEditSummary = useCallback(async (id: string, summary: string) => {
+    await handleTimeLogEdit(id, { summary })
+  }, [handleTimeLogEdit])
+
+  const handleEditCategory = useCallback(async (id: string, category: string) => {
+    await handleTimeLogEdit(id, { category })
+  }, [handleTimeLogEdit])
+
+  const handleEditTimes = useCallback(async (id: string, start: string, end: string) => {
+    const duration = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000)
+    try {
+      await updateTimeLog(id, { start_time: start, end_time: end })
+      setTimeLogs(prev => prev.map(l => l.id === id ? { ...l, start_time: start, end_time: end, duration } : l))
+    } catch (e) {
+      console.error('Failed to edit time log times', e)
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -189,6 +651,8 @@ export function TodoView() {
     return `${Math.floor(mins / 60)}h${mins % 60 > 0 ? `${mins % 60}分` : ''}`
   }
 
+  const activeTodo = activeTimer ? todos.find(t => t.id === activeTimer) : null
+
   // Category selector component
   const CatSelect = ({ value, onChange }: { value: TodoCategory; onChange: (v: TodoCategory) => void }) => (
     <select
@@ -196,8 +660,8 @@ export function TodoView() {
       onChange={e => onChange(e.target.value as TodoCategory)}
       className="text-xs border border-gray-200 rounded px-1 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400"
     >
-      {TODO_CATEGORIES.map(c => (
-        <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
+      {catDefs.map(c => (
+        <option key={c.name} value={c.name}>{c.name}</option>
       ))}
     </select>
   )
@@ -219,6 +683,29 @@ export function TodoView() {
           🧹 完了を消去
         </button>
       </div>
+
+      {/* Active timer bar */}
+      {activeTodo && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-orange-50 border-b border-orange-200">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+              style={{ backgroundColor: catInfo(activeTodo.category, catDefs).color }}
+            />
+            <span className="text-sm font-medium text-gray-800 truncate">{activeTodo.title}</span>
+            <span className="text-xs text-gray-500 whitespace-nowrap"><CatIcon name={catInfo(activeTodo.category, catDefs).emoji} /> {catInfo(activeTodo.category, catDefs).name}</span>
+          </div>
+          <span className="ml-auto text-lg font-mono font-bold text-orange-700 whitespace-nowrap">
+            ⏱ {formatTime(timerElapsed)}
+          </span>
+          <button
+            onClick={() => startTimer(activeTodo.id)}
+            className="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+          >
+            ■ 終了
+          </button>
+        </div>
+      )}
 
       {/* Main canvas */}
       <div className="flex-1 flex overflow-hidden">
@@ -252,7 +739,7 @@ export function TodoView() {
           {/* Today's task list */}
           <div className="space-y-2">
             {todayTodos.map(todo => {
-              const cat = catInfo(todo.category)
+              const cat = catInfo(todo.category, catDefs)
               const isActiveTimer = activeTimer === todo.id
               const elapsedFormatted = isActiveTimer ? formatTime(timerElapsed) : formatMinutes(todo.actual_minutes)
               return (
@@ -367,7 +854,7 @@ export function TodoView() {
           </div>
         </div>
 
-        {/* ── Right: Backlog ── */}
+        {/* ── Right: Backlog + Analytics + Timeline ── */}
         <div className="w-[380px] min-w-[320px] overflow-y-auto bg-white p-4">
           <h3 className="text-sm font-bold text-gray-700 mb-3">📥 受信箱 & バックログ</h3>
 
@@ -397,20 +884,20 @@ export function TodoView() {
           {/* Category filter chips */}
           <div className="flex flex-wrap gap-1 mb-3">
             {[
-              { key: 'all', label: 'すべて', color: '#6B7280', bg: '' },
-              ...TODO_CATEGORIES,
+              { name: 'all', emoji: '', color: '#6B7280', bg_color: '' } as CategoryDefinition,
+              ...catDefs,
             ].map(cat => (
               <button
-                key={cat.key}
-                onClick={() => setFilterCat(cat.key)}
+                key={cat.name}
+                onClick={() => setFilterCat(cat.name)}
                 className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                  filterCat === cat.key
+                  filterCat === cat.name
                     ? 'text-white font-medium'
                     : 'text-gray-600 hover:bg-gray-100 bg-gray-50'
                 }`}
-                style={filterCat === cat.key ? { backgroundColor: cat.color || '#6B7280' } : {}}
+                style={filterCat === cat.name ? { backgroundColor: cat.color || '#6B7280' } : {}}
               >
-                {cat.key !== 'all' && `${cat.emoji} `}{cat.label}
+                {cat.name !== 'all' && <><CatIcon name={cat.emoji} /> </>}{cat.name === 'all' ? 'すべて' : cat.name}
               </button>
             ))}
           </div>
@@ -422,7 +909,7 @@ export function TodoView() {
                 {filterCat === 'all' ? 'バックログは空です。新しいタスクを収集しましょう。' : 'このカテゴリのタスクはありません。'}
               </div>
             ) : filteredBacklog.map(todo => {
-              const cat = catInfo(todo.category)
+              const cat = catInfo(todo.category, catDefs)
               return (
                 <div
                   key={todo.id}
@@ -435,7 +922,7 @@ export function TodoView() {
                   <span className="text-sm text-gray-700 flex-1 truncate">{todo.title}</span>
 
                   {/* Category label */}
-                  <span className="text-[10px] text-gray-400 hidden sm:block">{cat.emoji}{cat.label}</span>
+                  <span className="text-[10px] text-gray-400 hidden sm:block"><CatIcon name={cat.emoji} />{cat.name}</span>
 
                   {/* Edit */}
                   <button
@@ -467,8 +954,54 @@ export function TodoView() {
               )
             })}
           </div>
+
+          {/* Separator */}
+          <hr className="my-4 border-gray-200" />
+
+          {/* 📊 Analytics (collapsible) */}
+          <details className="mb-4">
+            <summary className="text-sm font-bold text-gray-700 cursor-pointer select-none">
+              📊 データ統計
+              <span className="text-xs font-normal text-gray-400 ml-1">
+                {(() => {
+                  const totalMin = timeLogs.reduce((s, l) => s + (l.duration ?? 0), 0)
+                  return totalMin > 0 ? `${formatDuration(totalMin)}` : ''
+                })()}
+              </span>
+            </summary>
+            <Analytics logs={timeLogs} baseDate={new Date()} />
+          </details>
+
+          {/* 📋 Timeline */}
+          <div>
+            <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
+              <span>📋</span> 今日のセッション
+            </h3>
+            <Timeline
+              logs={timeLogs}
+              onEditSummary={handleEditSummary}
+              onEditCategory={handleEditCategory}
+              onEditTimes={handleEditTimes}
+              onDelete={handleTimeLogDelete}
+            />
+          </div>
         </div>
       </div>
+
+      {/* ── Summary Modal ── */}
+      {summaryModal && (() => {
+        const todo = todos.find(t => t.id === summaryModal.taskId)
+        if (!todo) return null
+        return (
+          <SummaryModal
+            todo={todo}
+            catDefs={catDefs}
+            elapsedMinutes={summaryModal.minutes}
+            onSave={handleTimerSummarySave}
+            onSkip={handleTimerSummarySkip}
+          />
+        )
+      })()}
 
       {/* ── Edit Modal ── */}
       {editingTodo && (
@@ -491,8 +1024,8 @@ export function TodoView() {
                   onChange={e => setEditForm(f => ({ ...f, category: e.target.value as TodoCategory }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
                 >
-                  {TODO_CATEGORIES.map(c => (
-                    <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
+                  {catDefs.map(c => (
+                    <option key={c.name} value={c.name}>{c.name}</option>
                   ))}
                 </select>
               </div>

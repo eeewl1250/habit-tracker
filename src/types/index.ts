@@ -1,12 +1,12 @@
 export type PeriodType = 'frequency' | 'weekday'
 export type TaskStatus = 'active' | 'disabled'
-export type ViewMode = 'home' | 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep' | 'focus' | 'finance' | 'diary' | 'schedule' | 'review'
+export type ViewMode = 'home' | 'week' | 'month' | 'heatmap' | 'stats' | 'notes' | 'menstruation' | 'craving' | 'sleep' | 'focus' | 'finance' | 'diary' | 'schedule' | 'review' | 'todo' | 'categories'
 
-export type TimeCategory = 'job_hunting' | 'self_growth'
+export type TimeCategory = string
 
-export const TIME_CATEGORIES: { key: TimeCategory; label: string; emoji: string }[] = [
-  { key: 'job_hunting', label: '就職活動', emoji: '💼' },
-  { key: 'self_growth', label: '自己投資', emoji: '📚' },
+export const TIME_CATEGORIES = [
+  { key: 'job_hunting' as TimeCategory, label: '就職活動', emoji: '💼' },
+  { key: 'self_growth' as TimeCategory, label: '自己投資', emoji: '📚' },
 ]
 
 export interface Note {
@@ -27,6 +27,20 @@ export interface Category {
   color: string
   bg_color: string
   sort_order?: number
+}
+
+export interface CategoryDefinition {
+  id: string
+  name: string
+  color: string
+  bg_color: string
+  emoji: string
+  is_default: boolean
+  bonus_enabled: boolean
+  bonus_rate: number
+  sort_order: number
+  created_at: string
+  updated_at: string
 }
 
 export interface Task {
@@ -260,7 +274,7 @@ export interface DiaryEntry {
 // ── Todo ──
 
 export type TodoStatus = 'backlog' | 'today' | 'done'
-export type TodoCategory = 'school' | 'job' | 'life' | 'ent' | 'study'
+export type TodoCategory = string
 
 export interface Todo {
   id: string

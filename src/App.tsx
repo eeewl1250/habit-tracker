@@ -16,6 +16,7 @@ import { HomeView } from './components/HomeView'
 import { ScheduleView } from './components/ScheduleView'
 import { ReviewCanvas } from './components/ReviewCanvas'
 import { TodoView } from './components/TodoView'
+import { CategoryManagerPage } from './components/CategoryManagerPage'
 import { TaskForm } from './components/TaskForm'
 import { ManagementPage } from './components/ManagementPage'
 import { Toast } from './components/Toast'
@@ -31,7 +32,7 @@ import { useFinance } from './hooks/useFinance'
 import { useBudget } from './hooks/useBudget'
 import { useRecurring } from './hooks/useRecurring'
 import { useDiary } from './hooks/useDiary'
-import { fetchCategories } from './lib/api'
+import { fetchCategories, seedDefaultCategories } from './lib/api'
 import type { Category, ViewMode, TargetPool } from './types'
 import type { DiarySubMode } from './components/DiaryView'
 
@@ -92,6 +93,11 @@ function App() {
     fetchCategories().then(setCategories).catch(() => {})
   }, [])
 
+  // Seed default category definitions on first load
+  useEffect(() => {
+    seedDefaultCategories().catch(() => {})
+  }, [])
+
   useEffect(() => {
     loadLogs()
   }, [loadLogs])
@@ -109,6 +115,7 @@ function App() {
   const isSchedule = dates.viewMode === 'schedule'
   const isReview = dates.viewMode === 'review'
   const isTodo = dates.viewMode === 'todo'
+  const isCategories = dates.viewMode === 'categories'
 
   const focusDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
   useEffect(() => {
@@ -202,7 +209,7 @@ function App() {
           onViewModeChange={handleViewModeChange}
           managing={showManagement}
           onManage={handleManage}
-          hideDateNav={isHome || dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary || isSchedule || isReview || isTodo}
+          hideDateNav={isHome || dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary || isSchedule || isReview || isTodo || isCategories}
           dark={isDark}
         />
       )}
@@ -256,7 +263,7 @@ function App() {
             onUpdateRecurringRecord={recurring.updateMonthlyRecord}
           />
         ) : isSchedule ? (
-          <ScheduleView />
+          <ScheduleView onNavigateToCategories={() => dates.setViewMode('categories')} />
         ) : isDiary ? (
           <DiaryView
             entries={diary.entries}
@@ -266,6 +273,8 @@ function App() {
           />
           ) : isTodo ? (
             <TodoView />
+          ) : isCategories ? (
+            <CategoryManagerPage />
           ) : isReview ? (
             <ReviewCanvas />
           ) : isSleep ? (
@@ -348,7 +357,7 @@ function App() {
       </main>
       )}
 
-      {!showManagement && !isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && !isTodo && (
+      {!showManagement && !isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && !isTodo && !isCategories && (
         <button
           onClick={() => setShowForm(true)}
           className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
@@ -357,7 +366,7 @@ function App() {
         </button>
       )}
 
-      {!isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && !isTodo && (
+      {!isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && !isTodo && !isCategories && (
         <>
           <Toast
             key={toast.key}

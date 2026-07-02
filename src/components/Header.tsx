@@ -52,6 +52,7 @@ const navGroups: NavGroup[] = [
       { key: 'finance', label: '家計簿' },
       { key: 'notes', label: 'メモ' },
       { key: 'review', label: '復盤' },
+      { key: 'categories', label: 'カテゴリ' },
     ],
   },
 ]
