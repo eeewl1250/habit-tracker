@@ -156,7 +156,7 @@ export function ScheduleView({ onNavigateToCategories }: { onNavigateToCategorie
   }, [])
 
   return (
-    <div className="max-w-6xl mx-auto flex flex-col px-2 md:px-4 pt-4 overflow-hidden h-full pb-20">
+    <div className="max-w-6xl mx-auto flex flex-col px-2 md:px-4 pt-4 overflow-hidden max-h-full pb-20">
       {/* Fixed header */}
       <div className="shrink-0">
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -391,12 +391,12 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
       <div className="hidden md:block  rounded-lg overflow-hidden flex flex-col">
         <div className="grid grid-cols-7">
           {WEEKDAYS_JP.map((d) => (
-            <div key={d} className="text-center text-xs text-slate-400 py-2 border-b border-r border-slate-100 last:border-r-0">
+            <div key={d} className="text-center text-xs text-slate-400 py-2 border-b border-r border-slate-200 last:border-r-0">
               {d}
             </div>
           ))}
         </div>
-        <div className="flex-1 grid grid-cols-7">
+        <div className="flex-1 overflow-auto scrollbar-hide grid grid-cols-7">
           {days.map((day) => {
             const dateStr = format(day, 'yyyy-MM-dd')
             const dayInsts = grouped[dateStr] ?? []
@@ -406,13 +406,13 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
             return (
               <div
                 key={dateStr}
-                className={`min-h-[100px] border-b border-r border-slate-100 p-1 cursor-pointer ${
+                className={`h-[150px] border-b border-r border-slate-200 p-3 cursor-pointer ${
                   isCurrentMonth ? '' : 'bg-slate-50'
                 }`}
                 onClick={() => onNavigateToWeek?.(day)}
               >
-                <div className={`text-xs mb-1 ${
-                  isTodayDate ? 'bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center' : 'text-slate-400'
+                <div className={`text-base mb-1 ${
+                  isTodayDate ? 'bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center' : 'text-slate-600'
                 }`}>
                   {format(day, 'd')}
                 </div>
