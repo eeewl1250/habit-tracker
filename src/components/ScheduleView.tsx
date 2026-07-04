@@ -221,7 +221,7 @@ export function ScheduleView({ onNavigateToCategories }: { onNavigateToCategorie
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-hidden flex flex-col min-h-0 border border-slate-200 rounded-lg">
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0 border border-slate-200 rounded-lg bg-white">
 
       {viewMode === 'month' && (
         <MonthView
@@ -389,9 +389,9 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
     <>
       {/* PC: card grid */}
       <>
-        <div className="grid grid-cols-7">
+        <div className="grid grid-cols-7 bg-slate-50">
           {WEEKDAYS_JP.map((d) => (
-            <div key={d} className="text-center text-xs text-slate-400 py-2 border-b border-r border-slate-200 last:border-r-0">
+            <div key={d} className="text-center text-xs text-slate-600 py-2 border-b border-r border-slate-200 last:border-r-0">
               {d}
             </div>
           ))}
@@ -402,17 +402,20 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
             const dayInsts = grouped[dateStr] ?? []
             const isCurrentMonth = format(day, 'yyyy-MM') === currentMonth
             const isTodayDate = isToday(day)
+            const dayIndex = days.indexOf(day)
+            const isLastCol = dayIndex % 7 === 6
+            const isLastRow = dayIndex >= Math.floor((days.length - 1) / 7) * 7
 
             return (
               <div
                 key={dateStr}
-                className={`h-[150px] border-b border-r border-slate-200 p-3 cursor-pointer ${
-                  isCurrentMonth ? '' : 'bg-slate-50'
+                className={`h-[150px] ${isLastRow ? '' : 'border-b'} ${isLastCol ? '' : 'border-r'} border-slate-200 p-3 cursor-pointer ${
+                  isCurrentMonth ? (isTodayDate ? 'bg-blue-50' : '') : 'bg-slate-50/60'
                 }`}
                 onClick={() => onNavigateToWeek?.(day)}
               >
                 <div className={`text-base mb-1 ${
-                  isTodayDate ? 'bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center' : 'text-slate-600'
+                  isTodayDate ? 'bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center' : isCurrentMonth ? 'text-slate-600' : 'text-slate-300'
                 }`}>
                   {format(day, 'd')}
                 </div>
@@ -460,17 +463,20 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
               const isCurrentMonth = format(day, 'yyyy-MM') === currentMonth
               const isTodayDate = isToday(day)
               const isSelected = selectedDate === dateStr
+              const dayIndex = days.indexOf(day)
+              const isLastCol = dayIndex % 7 === 6
+              const isLastRow = dayIndex >= Math.floor((days.length - 1) / 7) * 7
 
               return (
                 <button
                   key={dateStr}
                   onClick={() => setSelectedDate(selectedDate === dateStr ? null : dateStr)}
-                  className={`min-h-[44px] border-b border-r border-slate-100 p-1 flex flex-col items-center justify-center ${
-                    isCurrentMonth ? '' : 'bg-slate-50'
+                  className={`min-h-[44px] ${isLastRow ? '' : 'border-b'} ${isLastCol ? '' : 'border-r'} border-slate-100 p-1 flex flex-col items-center justify-center ${
+                    isCurrentMonth ? (isTodayDate ? 'bg-blue-50' : '') : 'bg-slate-50/60'
                   } ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
                 >
                   <div className={`text-xs ${
-                    isTodayDate ? 'bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center' : 'text-slate-400'
+                    isTodayDate ? 'bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center' : isCurrentMonth ? 'text-slate-400' : 'text-slate-300'
                   }`}>
                     {format(day, 'd')}
                   </div>
@@ -535,7 +541,7 @@ function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: 
     <>
       {/* All-day section */}
       {allDayInstances.length > 0 && (
-        <div className="border-b border-slate-100">
+        <div className="border-b border-slate-200">
           <div className="flex" style={{ minHeight: 40 }}>
             <div className="w-12 flex-shrink-0" />
             <div className="flex-1 grid grid-cols-7">
@@ -543,7 +549,7 @@ function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: 
                 const dateStr = format(day, 'yyyy-MM-dd')
                 const dayAllDay = allDayInstances.filter((i) => i.date === dateStr)
                 return (
-                  <div key={dateStr} className="border-r border-slate-100 last:border-r-0 p-1">
+                  <div key={dateStr} className="border-r border-slate-200 last:border-r-0 p-1">
                     {dayAllDay.map((inst) => (
                       <button
                         key={inst.id}
@@ -566,13 +572,13 @@ function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: 
       )}
 
       {/* Day headers */}
-      <div className="flex border-b border-slate-100 sticky top-0 bg-white z-20">
+      <div className="flex border-b border-slate-200 sticky top-0  bg-slate-50 z-20">
         <div className="w-12 flex-shrink-0" />
         <div className="flex-1 grid grid-cols-7">
           {days.map((day) => (
             <div
               key={format(day, 'yyyy-MM-dd')}
-              className="text-center py-2 border-r border-slate-100 last:border-r-0 cursor-pointer hover:bg-slate-50 transition-colors"
+              className="text-center py-2 border-r border-slate-200 last:border-r-0 cursor-pointer hover:bg-slate-50 transition-colors"
               onClick={() => onNavigateToDay?.(day)}
             >
               <div className="text-xs text-slate-400">{format(day, 'E', { locale: ja })}</div>
@@ -604,7 +610,7 @@ function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: 
               return (
                 <div key={dateStr} className="relative border-r border-slate-100 last:border-r-0">
                   {HOURS.map((h) => (
-                    <div key={h} className="border-b border-slate-50" style={{ height: HOUR_HEIGHT }} />
+                    <div key={h} className="border-b border-slate-100" style={{ height: HOUR_HEIGHT }} />
                   ))}
                   {dayTimed.map((inst) => {
                     const [sh] = inst.time_start!.split(':').map(Number)
@@ -703,7 +709,7 @@ function DayView({ instances, apiCats, onPopover }: ViewProps) {
           </div>
           <div className="flex-1 relative">
             {HOURS.map((h) => (
-              <div key={h} className="border-b border-slate-50" style={{ height: HOUR_HEIGHT }} />
+              <div key={h} className="border-b border-slate-100" style={{ height: HOUR_HEIGHT }} />
             ))}
             {timedInstances.map((inst) => {
               const [sh, sm] = inst.time_start!.split(':').map(Number)
