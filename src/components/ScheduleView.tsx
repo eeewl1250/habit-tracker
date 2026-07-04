@@ -388,7 +388,7 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
   return (
     <>
       {/* PC: card grid */}
-      <div className="hidden md:block  rounded-lg overflow-hidden flex flex-col">
+      <>
         <div className="grid grid-cols-7">
           {WEEKDAYS_JP.map((d) => (
             <div key={d} className="text-center text-xs text-slate-400 py-2 border-b border-r border-slate-200 last:border-r-0">
@@ -441,7 +441,7 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
             )
           })}
         </div>
-      </div>
+      </>
 
       {/* Mobile: top calendar + bottom list */}
       <div className="md:hidden">
