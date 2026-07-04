@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, differenceInMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -6,6 +6,7 @@ import type { Todo, TodoCategory, TodoStatus, TimeLog, TimeCategory, CategoryDef
 import { TIME_CATEGORIES, TIME_BONUS_RATE, WEEKDAY_KEYS } from '../types'
 import { fetchTodos, fetchCategoryDefinitions, createTodo as apiCreateTodo, updateTodo as apiUpdateTodo, deleteTodo as apiDeleteTodo, createTimeLog, fetchTimeLogs, updateTimeLog, deleteTimeLog, fetchSchedules, checkIn, undoCheckIn } from '../lib/api'
 import { CatIcon } from './Icon'
+import { useConfirm } from '../hooks/useConfirm'
 
 const MAX_TODAY = 5
 
@@ -393,6 +394,10 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
   const [rightInput, setRightInput] = useState('')
   const [rightCat, setRightCat] = useState<TodoCategory>(defaultCat?.name ?? '生活')
   const [filterCat, setFilterCat] = useState<string>('all')
+  const [focusTab, setFocusTab] = useState<'habits' | 'schedules' | 'tasks'>('habits')
+  const [sessionTab, setSessionTab] = useState<'analytics' | 'sessions'>('analytics')
+  const [doneTab, setDoneTab] = useState<'today' | 'all'>('today')
+  const [confirm, ConfirmModal] = useConfirm()
 
   // Timer state
   const [activeTimer, setActiveTimer] = useState<string | null>(null)
@@ -524,11 +529,12 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
   }, [])
 
   const toggleDone = useCallback(async (id: string, isDone: boolean) => {
+    const todo = todos.find(t => t.id === id)
+    if (isDone && !await confirm(`「${todo?.title ?? ''}」を未完了に戻しますか？`)) return
     const status: TodoStatus = isDone ? 'backlog' : 'done'
     const now = isDone ? null : new Date().toISOString()
-    const t = todos.find(t => t.id === id)
-    const clue = !isDone && t
-      ? `✅ ${t.title}${t.actual_minutes > 0 ? `（${t.actual_minutes}分）` : ''}`
+    const clue = !isDone && todo
+      ? `✅ ${todo.title}${todo.actual_minutes > 0 ? `（${todo.actual_minutes}分）` : ''}`
       : null
     await updateField(id, { status, completed_at: now, diary_clue: clue })
   }, [todos, updateField])
@@ -692,6 +698,11 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
     const bTime = b.completed_at ?? b.updated_at
     return new Date(bTime).getTime() - new Date(aTime).getTime()
   })
+  const sortedDoneTodos = useMemo(() => [...doneTodos].sort((a, b) => {
+    const aTime = a.completed_at ?? a.updated_at
+    const bTime = b.completed_at ?? b.updated_at
+    return new Date(bTime).getTime() - new Date(aTime).getTime()
+  }), [doneTodos])
 
   const backlogTodos = todos.filter(t => t.status === 'backlog')
   const filteredBacklog = filterCat === 'all'
@@ -725,7 +736,7 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
   )
 
   return (
-    <div className="flex flex-col bg-gray-50">
+    <div className="flex flex-col bg-gray-50 h-full">
       {/* Active timer bar */}
       {activeTodo && (
         <div className="flex items-center gap-3 px-4 py-2 bg-orange-50 border-b border-orange-200">
@@ -754,126 +765,140 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 h-full">
           {/* ── Column 1: 今日のフォーカス ── */}
           <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
-            <div className="shrink-0 p-4 pb-0 space-y-3">
+            <div className="shrink-0 px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-bold text-gray-700">🎯 今日のフォーカス</h3>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-gray-500">📋 习惯</span>
-                <span className="text-[10px] text-gray-400">（自動）</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-gray-500">📅 日程</span>
-                <span className="text-[10px] text-gray-400">（自動）</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-gray-500">🎯 任务池</span>
-                <span className="text-[10px] text-gray-400">（あと{emptySlots}件）</span>
-              </div>
-              <div className="flex gap-1 pb-2">
-                <CatSelect value={leftCat} onChange={setLeftCat} />
-                <input
-                  value={leftInput}
-                  onChange={e => setLeftInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && leftInput.trim()) {
-                      addTodo(leftInput, 'today', leftCat)
-                      setLeftInput('')
-                    }
-                  }}
-                  placeholder="今日のタスク..."
-                  className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
+            </div>
+            <div className="shrink-0 flex border-b border-gray-100">
+              {[
+                { key: 'habits', label: '📋 习惯', sub: '自動' },
+                { key: 'schedules', label: '📅 日程', sub: '自動' },
+                { key: 'tasks', label: '🎯 任务池', sub: `あと${emptySlots}件` },
+              ].map(tab => (
                 <button
-                  onClick={() => { if (leftInput.trim()) { addTodo(leftInput, 'today', leftCat); setLeftInput('') } }}
-                  className="px-2 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  key={tab.key}
+                  onClick={() => setFocusTab(tab.key as 'habits' | 'schedules' | 'tasks')}
+                  className={`flex-1 py-2 text-center transition-colors ${
+                    focusTab === tab.key
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
                 >
-                  追加
+                  <div className="text-xs font-medium leading-tight">{tab.label}</div>
+                  <div className="text-[10px] opacity-60">{tab.sub}</div>
                 </button>
-              </div>
+              ))}
             </div>
             <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
-              <div className="space-y-1">
-                {todayHabits.length === 0 ? (
-                  <p className="text-xs text-gray-300 py-1">今日の習慣はありません</p>
-                ) : todayHabits.map(task => {
-                  const done = todayLogsSet.has(task.id)
-                  return (
+              {focusTab === 'habits' && (
+                <div className="space-y-1 pt-3">
+                  {todayHabits.length === 0 ? (
+                    <p className="text-xs text-gray-300 py-1">今日の習慣はありません</p>
+                  ) : todayHabits.map(task => {
+                    const done = todayLogsSet.has(task.id)
+                    return (
+                      <button
+                        key={task.id}
+                        onClick={() => handleHabitToggle(task.id)}
+                        className={`flex items-center gap-2 w-full text-left p-2 rounded-lg transition-colors ${
+                          done ? 'bg-green-50' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                          done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'
+                        }`}>
+                          {done && <span className="text-[10px]">✓</span>}
+                        </span>
+                        <span className={`text-xs ${done ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                          {task.name}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {focusTab === 'schedules' && (
+                <div className="space-y-1 pt-3">
+                  {todaySchedules.length === 0 ? (
+                    <p className="text-xs text-gray-300 py-1">今日の日程はありません</p>
+                  ) : todaySchedules.map(s => (
+                    <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-blue-50">
+                      <span className="text-xs">📌</span>
+                      <span className="text-xs text-gray-700 flex-1 truncate">{s.title}</span>
+                      {s.time_start && (
+                        <span className="text-[10px] text-gray-500 shrink-0">
+                          {s.time_start.slice(0, 5)}{s.time_end ? `-${s.time_end.slice(0, 5)}` : ''}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {focusTab === 'tasks' && (
+                <div className="space-y-1.5 pt-3">
+                  <div className="flex gap-1 pb-1 sticky top-0 bg-white">
+                    <CatSelect value={leftCat} onChange={setLeftCat} />
+                    <input
+                      value={leftInput}
+                      onChange={e => setLeftInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && leftInput.trim()) {
+                          addTodo(leftInput, 'today', leftCat)
+                          setLeftInput('')
+                        }
+                      }}
+                      placeholder="今日のタスク..."
+                      className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
                     <button
-                      key={task.id}
-                      onClick={() => handleHabitToggle(task.id)}
-                      className={`flex items-center gap-2 w-full text-left p-2 rounded-lg transition-colors ${
-                        done ? 'bg-green-50' : 'hover:bg-gray-50'
-                      }`}
+                      onClick={() => { if (leftInput.trim()) { addTodo(leftInput, 'today', leftCat); setLeftInput('') } }}
+                      className="px-2 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                      <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'
-                      }`}>
-                        {done && <span className="text-[10px]">✓</span>}
-                      </span>
-                      <span className={`text-xs ${done ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                        {task.name}
-                      </span>
+                      追加
                     </button>
-                  )
-                })}
-              </div>
-              <div className="space-y-1">
-                {todaySchedules.length === 0 ? (
-                  <p className="text-xs text-gray-300 py-1">今日の日程はありません</p>
-                ) : todaySchedules.map(s => (
-                  <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-blue-50">
-                    <span className="text-xs">📌</span>
-                    <span className="text-xs text-gray-700 flex-1 truncate">{s.title}</span>
-                    {s.time_start && (
-                      <span className="text-[10px] text-gray-500 shrink-0">
-                        {s.time_start.slice(0, 5)}{s.time_end ? `-${s.time_end.slice(0, 5)}` : ''}
-                      </span>
-                    )}
                   </div>
-                ))}
-              </div>
-              <div className="space-y-1.5">
-                {todayTodos.map(todo => {
-                  const cat = catInfo(todo.category, catDefs)
-                  const isActiveTimer = activeTimer === todo.id
-                  const elapsedFormatted = isActiveTimer ? formatTime(timerElapsed) : formatMinutes(todo.actual_minutes)
-                  return (
-                    <div key={todo.id} className="rounded-lg border border-gray-200 p-2.5 bg-white hover:border-gray-300 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => toggleDone(todo.id, false)}
-                          className="w-4 h-4 rounded border-2 border-gray-300 flex items-center justify-center shrink-0 hover:border-blue-400 transition-colors"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: cat.color }} />
-                          <span className="text-xs text-gray-800">{todo.title}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button onClick={() => startTimer(todo.id)}
-                            className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
-                              isActiveTimer ? 'bg-orange-100 text-orange-700 font-bold animate-pulse' : 'text-gray-400 hover:bg-gray-100'
-                            }`}>
-                            ⏳ {elapsedFormatted}
-                          </button>
-                          <button onClick={() => openEdit(todo)} className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500" title="編集">✏️</button>
-                          {todo.source_url && (
-                            <a href={todo.source_url} target="_blank" rel="noopener noreferrer"
-                              className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500" title="ソースを開く">📂</a>
-                          )}
-                          <button onClick={() => removeFromToday(todo.id)} className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-red-500" title="削除">✕</button>
+                  {todayTodos.map(todo => {
+                    const cat = catInfo(todo.category, catDefs)
+                    const isActiveTimer = activeTimer === todo.id
+                    const elapsedFormatted = isActiveTimer ? formatTime(timerElapsed) : formatMinutes(todo.actual_minutes)
+                    return (
+                      <div key={todo.id} className="rounded-lg border border-gray-200 p-2.5 bg-white hover:border-gray-300 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleDone(todo.id, false)}
+                            className="w-4 h-4 rounded border-2 border-gray-300 flex items-center justify-center shrink-0 hover:border-blue-400 transition-colors"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: cat.color }} />
+                            <span className="text-xs text-gray-800">{todo.title}</span>
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button onClick={() => startTimer(todo.id)}
+                              className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+                                isActiveTimer ? 'bg-orange-100 text-orange-700 font-bold animate-pulse' : 'text-gray-400 hover:bg-gray-100'
+                              }`}>
+                              ⏳ {elapsedFormatted}
+                            </button>
+                            <button onClick={() => openEdit(todo)} className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500" title="編集">✏️</button>
+                            {todo.source_url && (
+                              <a href={todo.source_url} target="_blank" rel="noopener noreferrer"
+                                className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500" title="ソースを開く">📂</a>
+                            )}
+                            <button onClick={() => removeFromToday(todo.id)} className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-red-500" title="削除">✕</button>
+                          </div>
                         </div>
                       </div>
+                    )
+                  })}
+                  {Array.from({ length: emptySlots }).map((_, i) => (
+                    <div key={`empty-${i}`} className="rounded-lg border border-dashed border-gray-200 p-2.5 bg-gray-50/50">
+                      <div className="text-[10px] text-gray-300 text-center">空白スロット（あと{emptySlots - i}件）</div>
                     </div>
-                  )
-                })}
-                {Array.from({ length: emptySlots }).map((_, i) => (
-                  <div key={`empty-${i}`} className="rounded-lg border border-dashed border-gray-200 p-2.5 bg-gray-50/50">
-                    <div className="text-[10px] text-gray-300 text-center">空白スロット（あと{emptySlots - i}件）</div>
-                  </div>
-                ))}
-                {todayTodos.length === 0 && emptySlots === 0 && (
-                  <div className="text-[10px] text-gray-400 text-center py-4">今日のタスクがいっぱいです</div>
-                )}
-              </div>
+                  ))}
+                  {todayTodos.length === 0 && emptySlots === 0 && (
+                    <div className="text-[10px] text-gray-400 text-center py-4">今日のタスクがいっぱいです</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -947,24 +972,40 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
 
           {/* ── Column 3: 今日のセッションとデータ統計 ── */}
           <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
-            <div className="shrink-0 p-4 pb-0">
+            <div className="shrink-0 px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-bold text-gray-700">📊 今日のセッション & データ統計</h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 pt-3">
-              <details className="mb-3" open>
-                <summary className="text-xs font-medium text-gray-500 cursor-pointer select-none mb-2">
-                  分析
-                  <span className="text-xs text-gray-400 ml-1">
-                    {(() => {
-                      const totalMin = timeLogs.reduce((s, l) => s + (l.duration ?? 0), 0)
-                      return totalMin > 0 ? `${formatDuration(totalMin)}` : ''
-                    })()}
-                  </span>
-                </summary>
-                <Analytics logs={timeLogs} baseDate={new Date()} />
-              </details>
-              <div>
-                <h4 className="text-xs font-medium text-gray-500 mb-2">📋 今日のセッション</h4>
+            <div className="shrink-0 flex border-b border-gray-100">
+              {[
+                { key: 'analytics', label: '📈 分析', sub: '' },
+                { key: 'sessions', label: '📋 セッション', sub: '' },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setSessionTab(tab.key as 'analytics' | 'sessions')}
+                  className={`flex-1 py-2.5 text-center transition-colors ${
+                    sessionTab === tab.key
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <span className="text-xs font-medium">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {sessionTab === 'analytics' && (
+                <div>
+                  {(() => {
+                    const totalMin = timeLogs.reduce((s, l) => s + (l.duration ?? 0), 0)
+                    return totalMin > 0 ? (
+                      <p className="text-[10px] text-gray-400 mb-3">合計: {formatDuration(totalMin)}</p>
+                    ) : null
+                  })()}
+                  <Analytics logs={timeLogs} baseDate={new Date()} />
+                </div>
+              )}
+              {sessionTab === 'sessions' && (
                 <Timeline
                   logs={timeLogs}
                   onEditSummary={handleEditSummary}
@@ -972,13 +1013,13 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
                   onEditTimes={handleEditTimes}
                   onDelete={handleTimeLogDelete}
                 />
-              </div>
+              )}
             </div>
           </div>
 
           {/* ── Column 4: 已完成的记录 ── */}
           <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
-            <div className="shrink-0 p-4 pb-0 flex items-center justify-between">
+            <div className="shrink-0 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <h3 className="text-sm font-bold text-gray-700">✅ 已完成的记录</h3>
               {doneCount > 0 && (
                 <button onClick={clearCompleted} className="text-xs text-gray-400 hover:text-red-500">
@@ -986,13 +1027,32 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
                 </button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 pt-3">
+            <div className="shrink-0 flex border-b border-gray-100">
+              {[
+                { key: 'today', label: '📅 今日', sub: `${todayDoneTodos.length}` },
+                { key: 'all', label: '📋 すべて', sub: `${doneCount}` },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setDoneTab(tab.key as 'today' | 'all')}
+                  className={`flex-1 py-2 text-center transition-colors ${
+                    doneTab === tab.key
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <div className="text-xs font-medium leading-tight">{tab.label}</div>
+                  <div className="text-[10px] opacity-60">{tab.sub}</div>
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
               <div className="space-y-1.5">
-                {todayDoneTodos.length === 0 ? (
+                {(doneTab === 'today' ? todayDoneTodos : sortedDoneTodos).length === 0 ? (
                   <div className="text-xs text-gray-400 text-center py-8">
-                    今日の完了記録はまだありません
+                    完了記録はまだありません
                   </div>
-                ) : todayDoneTodos.map(todo => {
+                ) : (doneTab === 'today' ? todayDoneTodos : sortedDoneTodos).map(todo => {
                   const cat = catInfo(todo.category, catDefs)
                   return (
                     <div key={todo.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 group">
@@ -1108,6 +1168,7 @@ export function TodoView({ tasks, logs }: TodoViewProps) {
           </div>
         </div>
       )}
+      {ConfirmModal}
     </div>
   )
 }

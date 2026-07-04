@@ -12,6 +12,7 @@ import { correctDiary } from '../lib/gemini'
 import { getSavedThemeId, getTheme, buildMarkdownComponents } from '../lib/markdownThemes'
 import type { DiaryEntry, Todo } from '../types'
 import { fetchCompletedTodosForDate } from '../lib/api'
+import { useConfirm } from '../hooks/useConfirm'
 
 export type DiarySubMode = 'calendar' | 'editor'
 
@@ -157,6 +158,7 @@ function DiaryEditor({
 
   const [themeId] = useState<string>(getSavedThemeId)
   const [showThemePicker, setShowThemePicker] = useState(false)
+  const [confirm, ConfirmModal] = useConfirm()
   const themeRef = useRef<HTMLDivElement>(null)
   const currentTheme = getTheme(themeId)
   const markdownComponents = useMemo(() => buildMarkdownComponents(currentTheme), [currentTheme])
@@ -343,8 +345,8 @@ function DiaryEditor({
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white shrink-0">
         <div className="flex items-center gap-2">
-          <button onClick={() => {
-            if (isDirty && !window.confirm('保存されていない変更があります。破棄しますか？')) return
+          <button onClick={async () => {
+            if (isDirty && !await confirm('保存されていない変更があります。破棄しますか？')) return
             onBack()
           }} className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1">
             ← <span className="hidden sm:inline">カレンダー</span>
@@ -692,6 +694,7 @@ function DiaryEditor({
           </div>
         )}
       </div>
+      {ConfirmModal}
     </div>
   )
 }
@@ -700,6 +703,7 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
   const [diaryMonth, setDiaryMonth] = useState(startOfMonth(new Date()))
   const [viewMode, setViewMode] = useState<ViewMode>('calendar')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [confirm, ConfirmModal] = useConfirm()
 
   const monthStr = format(diaryMonth, 'yyyy-MM')
   const monthLabel = format(diaryMonth, 'yyyy年 M月', { locale: ja })
@@ -727,7 +731,7 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
   const rate = pastDays > 0 ? Math.round((writtenCount / pastDays) * 100) : 0
 
   const handleDayClick = useCallback(
-    (day: number) => {
+    async (day: number) => {
       const ds = `${monthStr}-${String(day).padStart(2, '0')}`
       const dateObj = parseISO(ds)
       if (isFuture(dateObj) && !isToday(dateObj)) return
@@ -738,7 +742,7 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
         setSelectedDate(ds)
         setViewMode('editor')
       } else if (isToday(dateObj)) {
-        if (window.confirm('今日の日本語日記がまだ書かれていません。今すぐ書きますか？')) {
+        if (await confirm('今日の日本語日記がまだ書かれていません。今すぐ書きますか？')) {
           setSelectedDate(ds)
           setViewMode('editor')
         }
@@ -747,7 +751,7 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
         setViewMode('editor')
       }
     },
-    [monthStr, entriesByDate],
+    [monthStr, entriesByDate, confirm],
   )
 
   const handleBack = useCallback(() => {
@@ -836,6 +840,7 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
           })}
         </div>
       </div>
+      {ConfirmModal}
     </div>
   )
 }
