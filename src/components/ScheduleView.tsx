@@ -613,10 +613,12 @@ function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: 
                     <div key={h} className="border-b border-slate-100" style={{ height: HOUR_HEIGHT }} />
                   ))}
                   {dayTimed.map((inst) => {
-                    const [sh] = inst.time_start!.split(':').map(Number)
-                    const [eh] = (inst.time_end ?? inst.time_start)!.split(':').map(Number)
-                    const top = sh * HOUR_HEIGHT
-                    const height = Math.max((eh - sh) * HOUR_HEIGHT, 24)
+                    const [sh, sm] = inst.time_start!.split(':').map(Number)
+                    const [eh, em] = (inst.time_end ?? inst.time_start)!.split(':').map(Number)
+                    const startMinutes = sh * 60 + sm
+                    const endMinutes = eh * 60 + em
+                    const top = (startMinutes / 60) * HOUR_HEIGHT
+                    const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 24)
                     const cat = getCategoryStyle(inst.category, apiCats)
                     return (
                       <button

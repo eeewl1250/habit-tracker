@@ -26,7 +26,7 @@ interface Props {
 
 export function SchedulePopover({ instance, onClose, onEdit, onDelete }: Props) {
   const ref = useRef<HTMLDivElement>(null)
-  const cat = getScheduleCategories().find((c) => c.key === instance.category)!
+  const cat = getScheduleCategories().find((c) => c.key === instance.category) ?? { key: 'other', label: instance.category, color: '#6B7280', bg: '#F3F4F6' }
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
