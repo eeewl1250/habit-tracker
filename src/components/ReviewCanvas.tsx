@@ -110,7 +110,7 @@ export function ReviewCanvas() {
   const uniqueTimelineDates = [...new Set(timelineEvents.map(e => e.date))].sort()
 
   return (
-    <div className="flex flex-col h-[calc(100vh-56px)] bg-gray-50">
+    <div className="flex flex-col bg-gray-50">
       {/* Month selector */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
         <div className="flex items-center gap-2">

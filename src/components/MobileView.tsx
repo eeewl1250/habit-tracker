@@ -221,7 +221,7 @@ export function MobileView({ tasks, logs, categoryColor, onReloadLogs, onManage 
 
   return (
     <div className="pb-28">
-      <div className="sticky top-[57px] z-10 bg-gray-50/95 backdrop-blur border-b border-gray-200">
+      <div className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur border-b border-gray-200">
         <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto">
           <button onClick={goPrev}
             className="px-4 py-2 text-gray-600 active:bg-gray-200 rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center text-lg">

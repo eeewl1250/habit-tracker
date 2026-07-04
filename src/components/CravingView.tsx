@@ -331,7 +331,7 @@ export function CravingView() {
   const ringOffset = ringCircumference - (monthlyStats.rate / 100) * ringCircumference
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
+    <div className="bg-slate-900 text-white">
       {showCelebration && <Confetti />}
       {showMoodPicker && <MoodPicker onSave={handleMoodSave} onCancel={() => setShowMoodPicker(false)} />}
       {editingLog && (

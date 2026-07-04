@@ -427,7 +427,7 @@ export function MatrixView({ tasks, days, logs, categoryColor, categoryBgColor, 
 
   return (
     <div className="relative">
-      <div ref={headerRef} className="sticky top-[57px] z-20 bg-gray-50 overflow-hidden border-b border-gray-200"
+      <div ref={headerRef} className="sticky top-0 z-20 bg-gray-50 overflow-hidden border-b border-gray-200"
         style={{ marginTop: '-1px' }}>
         <div
           className="grid gap-0 text-sm"

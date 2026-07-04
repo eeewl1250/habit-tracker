@@ -192,7 +192,7 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
   const pct = (lineIdx: number) => `${(lineIdx / CELL_COUNT) * 100}%`
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="bg-slate-900 text-slate-100">
       {/* ── Mobile ── */}
       <div className="block md:hidden px-4 pt-8 pb-24">
         <h2 className="text-center text-lg font-bold mb-1">{mobileDate === sleepToday ? '今日の睡眠' : '睡眠記録'}</h2>

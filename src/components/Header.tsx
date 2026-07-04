@@ -153,8 +153,8 @@ export function Header({
   }
 
   return (
-    <header className={`sticky top-0 z-100 backdrop-blur border-b transition-colors ${
-      dark ? 'bg-slate-900/95 border-slate-700' : 'bg-white/95 border-gray-200'
+    <header className={`border-b transition-colors ${
+      dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'
     }`}>
       <div className="flex items-center justify-between px-4 py-2 md:py-3 max-w-5xl mx-auto">
         <h1 className={`hidden md:block text-base md:text-lg font-bold whitespace-nowrap transition-colors ${

@@ -2,9 +2,9 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, differenceInMinutes } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import type { Todo, TodoCategory, TodoStatus, TimeLog, TimeCategory, CategoryDefinition } from '../types'
-import { TIME_CATEGORIES, TIME_BONUS_RATE } from '../types'
-import { fetchTodos, fetchCategoryDefinitions, createTodo as apiCreateTodo, updateTodo as apiUpdateTodo, deleteTodo as apiDeleteTodo, createTimeLog, fetchTimeLogs, updateTimeLog, deleteTimeLog } from '../lib/api'
+import type { Todo, TodoCategory, TodoStatus, TimeLog, TimeCategory, CategoryDefinition, Task, DailyLog, Schedule } from '../types'
+import { TIME_CATEGORIES, TIME_BONUS_RATE, WEEKDAY_KEYS } from '../types'
+import { fetchTodos, fetchCategoryDefinitions, createTodo as apiCreateTodo, updateTodo as apiUpdateTodo, deleteTodo as apiDeleteTodo, createTimeLog, fetchTimeLogs, updateTimeLog, deleteTimeLog, fetchSchedules, checkIn, undoCheckIn } from '../lib/api'
 import { CatIcon } from './Icon'
 
 const MAX_TODAY = 5
@@ -376,7 +376,12 @@ function Analytics({ logs, baseDate }: { logs: TimeLog[]; baseDate: Date }) {
   )
 }
 
-export function TodoView() {
+interface TodoViewProps {
+  tasks: Task[]
+  logs: DailyLog[]
+}
+
+export function TodoView({ tasks, logs }: TodoViewProps) {
   const [catDefs, setCatDefs] = useState<CategoryDefinition[]>([])
   const [todos, setTodos] = useState<Todo[]>([])
   const [loading, setLoading] = useState(true)
@@ -439,6 +444,52 @@ export function TodoView() {
   useEffect(() => {
     fetchCategoryDefinitions().then(setCatDefs).catch(() => {})
   }, [])
+
+  // ── Schedule state ──
+  const [schedules, setSchedules] = useState<Schedule[]>([])
+  useEffect(() => {
+    fetchSchedules().then(setSchedules).catch(() => {})
+  }, [])
+
+  // ── Today's habits (from habit tracker tasks) ──
+  const todayHabits = (() => {
+    const today = new Date()
+    const dayOfWeek = today.getDay()
+    const todayStr = format(today, 'yyyy-MM-dd')
+    return tasks.filter(t => {
+      if (t.status !== 'active') return false
+      if (t.period_type === 'weekday') {
+        if (!t.weekdays) return false
+        return t.weekdays.split(',').includes(WEEKDAY_KEYS[dayOfWeek])
+      }
+      if (t.period_type === 'frequency' && t.base_date && t.frequency) {
+        const base = new Date(t.base_date)
+        const diff = Math.floor((today.getTime() - base.getTime()) / (1000 * 60 * 60 * 24))
+        return diff % t.frequency === 0
+      }
+      return false
+    })
+  })()
+
+  const todayLogsSet = new Set(logs.filter(l => l.date === format(new Date(), 'yyyy-MM-dd')).map(l => l.task_id))
+
+  const handleHabitToggle = useCallback(async (taskId: string) => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+    const log = logs.find(l => l.task_id === taskId && l.date === todayStr)
+    if (log) {
+      await undoCheckIn(log.id)
+    } else {
+      await checkIn(taskId, todayStr)
+    }
+  }, [logs])
+
+  const [todaySchedules, setTodaySchedules] = useState<Schedule[]>([])
+  useEffect(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+    setTodaySchedules(
+      schedules.filter(s => s.date_start === todayStr)
+    )
+  }, [schedules])
 
   const addTodo = useCallback(async (title: string, status: TodoStatus, category: TodoCategory) => {
     if (!title.trim()) return
@@ -634,6 +685,13 @@ export function TodoView() {
   const emptySlots = MAX_TODAY - todayTodos.length
   const doneCount = todos.filter(t => t.status === 'done').length
   const totalCount = todos.filter(t => t.status !== 'done').length + doneCount
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const doneTodos = todos.filter(t => t.status === 'done')
+  const todayDoneTodos = doneTodos.filter(t => t.completed_at?.startsWith(todayStr)).sort((a, b) => {
+    const aTime = a.completed_at ?? a.updated_at
+    const bTime = b.completed_at ?? b.updated_at
+    return new Date(bTime).getTime() - new Date(aTime).getTime()
+  })
 
   const backlogTodos = todos.filter(t => t.status === 'backlog')
   const filteredBacklog = filterCat === 'all'
@@ -667,23 +725,7 @@ export function TodoView() {
   )
 
   return (
-    <div className="flex flex-col h-[calc(100vh-56px)] bg-gray-50">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <span className="text-base font-bold text-gray-800">🎯 行動看板</span>
-          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-            🟢 {doneCount}/{totalCount}
-          </span>
-        </div>
-        <button
-          onClick={clearCompleted}
-          className="px-3 py-1 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
-        >
-          🧹 完了を消去
-        </button>
-      </div>
-
+    <div className="flex flex-col bg-gray-50">
       {/* Active timer bar */}
       {activeTodo && (
         <div className="flex items-center gap-3 px-4 py-2 bg-orange-50 border-b border-orange-200">
@@ -707,283 +749,271 @@ export function TodoView() {
         </div>
       )}
 
-      {/* Main canvas */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* ── Left: Today's Focus ── */}
-        <div className="flex-1 min-w-0 overflow-y-auto border-r border-gray-200 bg-white p-4">
-          <h3 className="text-sm font-bold text-gray-700 mb-3">今日のフォーカス {emptySlots > 0 && <span className="text-xs font-normal text-gray-400">（あと{emptySlots}件）</span>}</h3>
-
-          {/* Quick add */}
-          <div className="flex gap-1 mb-4">
-            <CatSelect value={leftCat} onChange={setLeftCat} />
-            <input
-              value={leftInput}
-              onChange={e => setLeftInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && leftInput.trim()) {
-                  addTodo(leftInput, 'today', leftCat)
-                  setLeftInput('')
-                }
-              }}
-              placeholder="今日の緊急タスク..."
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-            <button
-              onClick={() => { if (leftInput.trim()) { addTodo(leftInput, 'today', leftCat); setLeftInput('') } }}
-              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              追加
-            </button>
-          </div>
-
-          {/* Today's task list */}
-          <div className="space-y-2">
-            {todayTodos.map(todo => {
-              const cat = catInfo(todo.category, catDefs)
-              const isActiveTimer = activeTimer === todo.id
-              const elapsedFormatted = isActiveTimer ? formatTime(timerElapsed) : formatMinutes(todo.actual_minutes)
-              return (
-                <div
-                  key={todo.id}
-                  className={`rounded-lg border p-3 transition-colors ${
-                    todo.status === 'done'
-                      ? 'bg-gray-50 border-gray-200'
-                      : 'bg-white border-gray-200 hover:border-gray-300'
-                  }`}
+      {/* Main canvas - 4 columns */}
+      <div className="flex-1 overflow-hidden p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 h-full">
+          {/* ── Column 1: 今日のフォーカス ── */}
+          <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 pb-0 space-y-3">
+              <h3 className="text-sm font-bold text-gray-700">🎯 今日のフォーカス</h3>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-gray-500">📋 习惯</span>
+                <span className="text-[10px] text-gray-400">（自動）</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-gray-500">📅 日程</span>
+                <span className="text-[10px] text-gray-400">（自動）</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-gray-500">🎯 任务池</span>
+                <span className="text-[10px] text-gray-400">（あと{emptySlots}件）</span>
+              </div>
+              <div className="flex gap-1 pb-2">
+                <CatSelect value={leftCat} onChange={setLeftCat} />
+                <input
+                  value={leftInput}
+                  onChange={e => setLeftInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && leftInput.trim()) {
+                      addTodo(leftInput, 'today', leftCat)
+                      setLeftInput('')
+                    }
+                  }}
+                  placeholder="今日のタスク..."
+                  className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <button
+                  onClick={() => { if (leftInput.trim()) { addTodo(leftInput, 'today', leftCat); setLeftInput('') } }}
+                  className="px-2 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <div className="flex items-start gap-2">
-                    {/* Checkbox */}
+                  追加
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+              <div className="space-y-1">
+                {todayHabits.length === 0 ? (
+                  <p className="text-xs text-gray-300 py-1">今日の習慣はありません</p>
+                ) : todayHabits.map(task => {
+                  const done = todayLogsSet.has(task.id)
+                  return (
                     <button
-                      onClick={() => toggleDone(todo.id, todo.status === 'done')}
-                      className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                        todo.status === 'done'
-                          ? 'bg-green-500 border-green-500 text-white'
-                          : 'border-gray-300 hover:border-blue-400'
+                      key={task.id}
+                      onClick={() => handleHabitToggle(task.id)}
+                      className={`flex items-center gap-2 w-full text-left p-2 rounded-lg transition-colors ${
+                        done ? 'bg-green-50' : 'hover:bg-gray-50'
                       }`}
                     >
-                      {todo.status === 'done' && <span className="text-xs">✓</span>}
-                    </button>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span
-                          className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: cat.color }}
-                        />
-                        <span className="text-[10px] font-medium text-gray-400">{cat.label}</span>
-                      </div>
-                      <span className={`text-sm ${todo.status === 'done' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                        {todo.title}
+                      <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                        done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'
+                      }`}>
+                        {done && <span className="text-[10px]">✓</span>}
                       </span>
-                      {todo.status === 'done' && todo.diary_clue && (
-                        <div className="mt-1 text-[10px] text-green-500 flex items-center gap-1">
-                          <span>📝</span> 自動的に日記の線索になります
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {/* Timer */}
-                      <button
-                        onClick={() => startTimer(todo.id)}
-                        className={`px-2 py-1 text-xs rounded transition-colors ${
-                          isActiveTimer
-                            ? 'bg-orange-100 text-orange-700 font-bold animate-pulse'
-                            : 'text-gray-500 hover:bg-gray-100'
-                        }`}
-                        title={isActiveTimer ? '停止' : 'タイマー開始'}
-                      >
-                        ⏳ {elapsedFormatted}
-                      </button>
-
-                      {/* Edit */}
-                      <button
-                        onClick={() => openEdit(todo)}
-                        className="px-1.5 py-1 text-xs text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                        title="編集"
-                      >
-                        ✏️
-                      </button>
-
-                      {/* Source link */}
-                      {todo.source_url && (
-                        <a
-                          href={todo.source_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-1.5 py-1 text-xs text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                          title="ソースを開く"
-                        >
-                          📂
-                        </a>
-                      )}
-
-                      {/* Remove from today */}
-                      <button
-                        onClick={() => removeFromToday(todo.id)}
-                        className="px-1.5 py-1 text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                        title="今日のリストから外す"
-                      >
-                        ❌
-                      </button>
-                    </div>
+                      <span className={`text-xs ${done ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                        {task.name}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="space-y-1">
+                {todaySchedules.length === 0 ? (
+                  <p className="text-xs text-gray-300 py-1">今日の日程はありません</p>
+                ) : todaySchedules.map(s => (
+                  <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-blue-50">
+                    <span className="text-xs">📌</span>
+                    <span className="text-xs text-gray-700 flex-1 truncate">{s.title}</span>
+                    {s.time_start && (
+                      <span className="text-[10px] text-gray-500 shrink-0">
+                        {s.time_start.slice(0, 5)}{s.time_end ? `-${s.time_end.slice(0, 5)}` : ''}
+                      </span>
+                    )}
                   </div>
-                </div>
-              )
-            })}
-
-            {/* Empty slots */}
-            {Array.from({ length: emptySlots }).map((_, i) => (
-              <div
-                key={`empty-${i}`}
-                className="rounded-lg border border-dashed border-gray-200 p-3 bg-gray-50/50"
-              >
-                <div className="text-xs text-gray-300 text-center">
-                  空白スロット（あと{emptySlots - i}件追加可能）
-                </div>
+                ))}
               </div>
-            ))}
-
-            {todayTodos.length === 0 && emptySlots === 0 && (
-              <div className="text-xs text-gray-400 text-center py-8">
-                今日はタスクがいっぱいです。完了したものからチェックを入れましょう。
+              <div className="space-y-1.5">
+                {todayTodos.map(todo => {
+                  const cat = catInfo(todo.category, catDefs)
+                  const isActiveTimer = activeTimer === todo.id
+                  const elapsedFormatted = isActiveTimer ? formatTime(timerElapsed) : formatMinutes(todo.actual_minutes)
+                  return (
+                    <div key={todo.id} className="rounded-lg border border-gray-200 p-2.5 bg-white hover:border-gray-300 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleDone(todo.id, false)}
+                          className="w-4 h-4 rounded border-2 border-gray-300 flex items-center justify-center shrink-0 hover:border-blue-400 transition-colors"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: cat.color }} />
+                          <span className="text-xs text-gray-800">{todo.title}</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button onClick={() => startTimer(todo.id)}
+                            className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+                              isActiveTimer ? 'bg-orange-100 text-orange-700 font-bold animate-pulse' : 'text-gray-400 hover:bg-gray-100'
+                            }`}>
+                            ⏳ {elapsedFormatted}
+                          </button>
+                          <button onClick={() => openEdit(todo)} className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500" title="編集">✏️</button>
+                          {todo.source_url && (
+                            <a href={todo.source_url} target="_blank" rel="noopener noreferrer"
+                              className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500" title="ソースを開く">📂</a>
+                          )}
+                          <button onClick={() => removeFromToday(todo.id)} className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-red-500" title="削除">✕</button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                {Array.from({ length: emptySlots }).map((_, i) => (
+                  <div key={`empty-${i}`} className="rounded-lg border border-dashed border-gray-200 p-2.5 bg-gray-50/50">
+                    <div className="text-[10px] text-gray-300 text-center">空白スロット（あと{emptySlots - i}件）</div>
+                  </div>
+                ))}
+                {todayTodos.length === 0 && emptySlots === 0 && (
+                  <div className="text-[10px] text-gray-400 text-center py-4">今日のタスクがいっぱいです</div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Right: Backlog + Analytics + Timeline ── */}
-        <div className="w-[380px] min-w-[320px] overflow-y-auto bg-white p-4">
-          <h3 className="text-sm font-bold text-gray-700 mb-3">📥 受信箱 & バックログ</h3>
-
-          {/* Quick collect */}
-          <div className="flex gap-1 mb-4">
-            <CatSelect value={rightCat} onChange={setRightCat} />
-            <input
-              value={rightInput}
-              onChange={e => setRightInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && rightInput.trim()) {
-                  addTodo(rightInput, 'backlog', rightCat)
-                  setRightInput('')
-                }
-              }}
-              placeholder="新しいアイデア/タスクを収集..."
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-            <button
-              onClick={() => { if (rightInput.trim()) { addTodo(rightInput, 'backlog', rightCat); setRightInput('') } }}
-              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              収集
-            </button>
+            </div>
           </div>
 
-          {/* Category filter chips */}
-          <div className="flex flex-wrap gap-1 mb-3">
-            {[
-              { name: 'all', emoji: '', color: '#6B7280', bg_color: '' } as CategoryDefinition,
-              ...catDefs,
-            ].map(cat => (
-              <button
-                key={cat.name}
-                onClick={() => setFilterCat(cat.name)}
-                className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                  filterCat === cat.name
-                    ? 'text-white font-medium'
-                    : 'text-gray-600 hover:bg-gray-100 bg-gray-50'
-                }`}
-                style={filterCat === cat.name ? { backgroundColor: cat.color || '#6B7280' } : {}}
-              >
-                {cat.name !== 'all' && <><CatIcon name={cat.emoji} /> </>}{cat.name === 'all' ? 'すべて' : cat.name}
-              </button>
-            ))}
-          </div>
-
-          {/* Backlog list */}
-          <div className="space-y-1.5">
-            {filteredBacklog.length === 0 ? (
-              <div className="text-xs text-gray-400 text-center py-8">
-                {filterCat === 'all' ? 'バックログは空です。新しいタスクを収集しましょう。' : 'このカテゴリのタスクはありません。'}
-              </div>
-            ) : filteredBacklog.map(todo => {
-              const cat = catInfo(todo.category, catDefs)
-              return (
-                <div
-                  key={todo.id}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors group"
+          {/* ── Column 2: 受信箱 & バックログ ── */}
+          <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 pb-0 space-y-3">
+              <h3 className="text-sm font-bold text-gray-700">📥 受信箱 & バックログ</h3>
+              <div className="flex gap-1">
+                <CatSelect value={rightCat} onChange={setRightCat} />
+                <input
+                  value={rightInput}
+                  onChange={e => setRightInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && rightInput.trim()) {
+                      addTodo(rightInput, 'backlog', rightCat)
+                      setRightInput('')
+                    }
+                  }}
+                  placeholder="新しいアイデア/タスクを収集..."
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <button
+                  onClick={() => { if (rightInput.trim()) { addTodo(rightInput, 'backlog', rightCat); setRightInput('') } }}
+                  className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <span
-                    className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: cat.color }}
-                  />
-                  <span className="text-sm text-gray-700 flex-1 truncate">{todo.title}</span>
-
-                  {/* Category label */}
-                  <span className="text-[10px] text-gray-400 hidden sm:block"><CatIcon name={cat.emoji} />{cat.name}</span>
-
-                  {/* Edit */}
+                  収集
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1 pb-2">
+                {[
+                  { name: 'all', emoji: '', color: '#6B7280', bg_color: '' } as CategoryDefinition,
+                  ...catDefs,
+                ].map(cat => (
                   <button
-                    onClick={() => openEdit(todo)}
-                    className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
-                    title="編集"
+                    key={cat.name}
+                    onClick={() => setFilterCat(cat.name)}
+                    className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                      filterCat === cat.name
+                        ? 'text-white font-medium'
+                        : 'text-gray-600 hover:bg-gray-100 bg-gray-50'
+                    }`}
+                    style={filterCat === cat.name ? { backgroundColor: cat.color || '#6B7280' } : {}}
                   >
-                    ✏️
+                    {cat.name !== 'all' && <><CatIcon name={cat.emoji} /> </>}{cat.name === 'all' ? 'すべて' : cat.name}
                   </button>
-
-                  {/* Move to today */}
-                  <button
-                    onClick={() => moveToToday(todo.id)}
-                    className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors opacity-0 group-hover:opacity-100"
-                    title="今日のリストに移動"
-                  >
-                    ⚡
-                  </button>
-
-                  {/* Delete */}
-                  <button
-                    onClick={() => deleteTodo(todo.id)}
-                    className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                    title="削除"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )
-            })}
+                ))}
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <div className="space-y-1.5">
+                {filteredBacklog.length === 0 ? (
+                  <div className="text-xs text-gray-400 text-center py-8">
+                    {filterCat === 'all' ? 'バックログは空です。' : 'このカテゴリのタスクはありません。'}
+                  </div>
+                ) : filteredBacklog.map(todo => {
+                  const cat = catInfo(todo.category, catDefs)
+                  return (
+                    <div key={todo.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                      <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                      <span className="text-sm text-gray-700 flex-1 truncate">{todo.title}</span>
+                      <span className="text-[10px] text-gray-400 hidden sm:block"><CatIcon name={cat.emoji} />{cat.name}</span>
+                      <button onClick={() => openEdit(todo)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100" title="編集">✏️</button>
+                      <button onClick={() => moveToToday(todo.id)} className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors opacity-0 group-hover:opacity-100" title="今日のリストに移動">⚡</button>
+                      <button onClick={() => deleteTodo(todo.id)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="削除">✕</button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
-          {/* Separator */}
-          <hr className="my-4 border-gray-200" />
+          {/* ── Column 3: 今日のセッションとデータ統計 ── */}
+          <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 pb-0">
+              <h3 className="text-sm font-bold text-gray-700">📊 今日のセッション & データ統計</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 pt-3">
+              <details className="mb-3" open>
+                <summary className="text-xs font-medium text-gray-500 cursor-pointer select-none mb-2">
+                  分析
+                  <span className="text-xs text-gray-400 ml-1">
+                    {(() => {
+                      const totalMin = timeLogs.reduce((s, l) => s + (l.duration ?? 0), 0)
+                      return totalMin > 0 ? `${formatDuration(totalMin)}` : ''
+                    })()}
+                  </span>
+                </summary>
+                <Analytics logs={timeLogs} baseDate={new Date()} />
+              </details>
+              <div>
+                <h4 className="text-xs font-medium text-gray-500 mb-2">📋 今日のセッション</h4>
+                <Timeline
+                  logs={timeLogs}
+                  onEditSummary={handleEditSummary}
+                  onEditCategory={handleEditCategory}
+                  onEditTimes={handleEditTimes}
+                  onDelete={handleTimeLogDelete}
+                />
+              </div>
+            </div>
+          </div>
 
-          {/* 📊 Analytics (collapsible) */}
-          <details className="mb-4">
-            <summary className="text-sm font-bold text-gray-700 cursor-pointer select-none">
-              📊 データ統計
-              <span className="text-xs font-normal text-gray-400 ml-1">
-                {(() => {
-                  const totalMin = timeLogs.reduce((s, l) => s + (l.duration ?? 0), 0)
-                  return totalMin > 0 ? `${formatDuration(totalMin)}` : ''
-                })()}
-              </span>
-            </summary>
-            <Analytics logs={timeLogs} baseDate={new Date()} />
-          </details>
-
-          {/* 📋 Timeline */}
-          <div>
-            <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
-              <span>📋</span> 今日のセッション
-            </h3>
-            <Timeline
-              logs={timeLogs}
-              onEditSummary={handleEditSummary}
-              onEditCategory={handleEditCategory}
-              onEditTimes={handleEditTimes}
-              onDelete={handleTimeLogDelete}
-            />
+          {/* ── Column 4: 已完成的记录 ── */}
+          <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 pb-0 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-700">✅ 已完成的记录</h3>
+              {doneCount > 0 && (
+                <button onClick={clearCompleted} className="text-xs text-gray-400 hover:text-red-500">
+                  🧹 消去
+                </button>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 pt-3">
+              <div className="space-y-1.5">
+                {todayDoneTodos.length === 0 ? (
+                  <div className="text-xs text-gray-400 text-center py-8">
+                    今日の完了記録はまだありません
+                  </div>
+                ) : todayDoneTodos.map(todo => {
+                  const cat = catInfo(todo.category, catDefs)
+                  return (
+                    <div key={todo.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 group">
+                      <button
+                        onClick={() => toggleDone(todo.id, true)}
+                        className="w-4 h-4 rounded border-2 border-green-400 bg-green-400 text-white flex items-center justify-center flex-shrink-0 hover:bg-green-500 transition-colors"
+                        title="バックログに戻す"
+                      >
+                        <span className="text-[10px]">✓</span>
+                      </button>
+                      <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                      <span className="text-sm text-gray-500 line-through flex-1 truncate">{todo.title}</span>
+                      {todo.actual_minutes > 0 && (
+                        <span className="text-[10px] text-gray-400">{formatMinutes(todo.actual_minutes)}</span>
+                      )}
+                      <span className="text-[10px] text-gray-400"><CatIcon name={cat.emoji} />{cat.name}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>

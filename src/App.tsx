@@ -198,7 +198,7 @@ function App() {
   const isDark = (isCraving || isSleep) && !isHome
 
   return (
-    <div className={`min-h-screen transition-colors ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
+    <div className={`h-screen overflow-hidden flex flex-col transition-colors ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
       {(!isDiary || diarySubMode === 'calendar') && !isReview && (
         <Header
           rangeLabel={dates.rangeLabel}
@@ -224,7 +224,7 @@ function App() {
           onNavigate={handleViewModeChange}
         />
       ) : (
-        <main className={`transition-colors ${(isDiary || isSchedule) ? 'w-full' : isDark ? '' : 'max-w-5xl mx-auto pb-24'}`}>
+        <main className="flex-1 overflow-y-auto scrollbar-hide">
           {showManagement ? (
             <ManagementPage
               tasks={tasks.tasks}
@@ -272,7 +272,7 @@ function App() {
             onModeChange={setDiarySubMode}
           />
           ) : isTodo ? (
-            <TodoView />
+            <TodoView tasks={tasks.tasks} logs={logs.logs} />
           ) : isCategories ? (
             <CategoryManagerPage />
           ) : isReview ? (

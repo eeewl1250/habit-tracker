@@ -156,7 +156,7 @@ export function ScheduleView({ onNavigateToCategories }: { onNavigateToCategorie
   }, [])
 
   return (
-    <div className="max-w-6xl mx-auto flex flex-col px-2 md:px-4 pt-4 overflow-hidden" style={{ height: 'calc(100dvh - 3.5rem)' }}>
+    <div className="max-w-6xl mx-auto flex flex-col px-2 md:px-4 pt-4 overflow-hidden h-full pb-20">
       {/* Fixed header */}
       <div className="shrink-0">
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -221,7 +221,7 @@ export function ScheduleView({ onNavigateToCategories }: { onNavigateToCategorie
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-auto min-h-0 pb-4">
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0 border border-slate-200 rounded-lg">
 
       {viewMode === 'month' && (
         <MonthView
@@ -388,7 +388,7 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
   return (
     <>
       {/* PC: card grid */}
-      <div className="hidden md:block border border-slate-200 rounded-lg overflow-hidden">
+      <div className="hidden md:block  rounded-lg overflow-hidden flex flex-col">
         <div className="grid grid-cols-7">
           {WEEKDAYS_JP.map((d) => (
             <div key={d} className="text-center text-xs text-slate-400 py-2 border-b border-r border-slate-100 last:border-r-0">
@@ -396,7 +396,7 @@ function MonthView({ baseDate, instances, apiCats, onPopover, onNavigateToWeek }
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7">
+        <div className="flex-1 grid grid-cols-7">
           {days.map((day) => {
             const dateStr = format(day, 'yyyy-MM-dd')
             const dayInsts = grouped[dateStr] ?? []
@@ -532,7 +532,7 @@ function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: 
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="border border-slate-200 rounded-lg">
+    <>
       {/* All-day section */}
       {allDayInstances.length > 0 && (
         <div className="border-b border-slate-100">
@@ -587,7 +587,7 @@ function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: 
       </div>
 
       {/* Time grid */}
-      <div ref={scrollRef} className="relative overflow-auto" style={{ height: 24 * HOUR_HEIGHT }}>
+      <div ref={scrollRef} className="relative overflow-auto scrollbar-hide" style={{ height: 24 * HOUR_HEIGHT }}>
         <div className="flex">
           <div className="w-12 flex-shrink-0 sticky left-0 z-10 bg-white">
             {HOURS.map((h) => (
@@ -649,7 +649,7 @@ function WeekView({ baseDate, instances, apiCats, onPopover, onNavigateToDay }: 
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -670,7 +670,7 @@ function DayView({ instances, apiCats, onPopover }: ViewProps) {
   const timedInstances = useMemo(() => instances.filter((i) => i.time_start), [instances])
 
   return (
-    <div className="border border-slate-200 rounded-lg overflow-hidden">
+    <>
       {/* All-day */}
       {allDayInstances.length > 0 && (
         <div className="p-2 border-b border-slate-100">
@@ -692,7 +692,7 @@ function DayView({ instances, apiCats, onPopover }: ViewProps) {
       )}
 
       {/* Time axis */}
-      <div ref={scrollRef} className="relative overflow-auto" style={{ height: 24 * HOUR_HEIGHT }}>
+      <div ref={scrollRef} className="relative overflow-auto scrollbar-hide" style={{ height: 24 * HOUR_HEIGHT }}>
         <div className="flex">
           <div className="w-12 flex-shrink-0 sticky left-0 z-10 bg-white">
             {HOURS.map((h) => (
@@ -743,7 +743,7 @@ function DayView({ instances, apiCats, onPopover }: ViewProps) {
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
