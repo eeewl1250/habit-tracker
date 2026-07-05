@@ -3,12 +3,14 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns
 import stampImg from '../images/stamp.png'
 import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import type { FinanceRecord, BaseCategory, Motivation, TargetPool, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord } from '../types'
-import { BASE_CATEGORIES, BUDGET_POOLS, resolveTargetPool, TIME_BONUS_RATE } from '../types'
+import type { FinanceRecord, BaseCategory, Motivation, TargetPool, BudgetSettings, RecurringTemplate, MonthlyRecurringRecord, CategoryDefinition } from '../types'
+import { BASE_CATEGORIES, BUDGET_POOLS, resolveTargetPool } from '../types'
+import { calcTimeBonus } from '../lib/bonus'
 
 interface FinanceViewProps {
   records: FinanceRecord[]
   timeLogs: { duration: number | null; category: string; start_time: string }[]
+  catDefs: CategoryDefinition[]
   budget: BudgetSettings | undefined
   dashboardMonth: Date
   onDashboardMonthChange: (month: Date) => void
@@ -759,7 +761,7 @@ function BudgetDashboard({
                   <span className={pool.rollover < 0 ? 'text-red-500 font-medium' : ''}>🔄 前月繰越: {pool.rolloverLabel}</span>
                 )}
                 {pool.bonus !== null && pool.bonus > 0 && (
-                  <span title={`${focusMinutes}分の集中時間 × ¥${TIME_BONUS_RATE}/h = +¥${pool.bonus.toLocaleString()}`}>🎮 集中ボーナス: +¥{pool.bonus.toLocaleString()}</span>
+                  <span title={`${focusMinutes}分の集中時間に基づくボーナス = +¥${pool.bonus.toLocaleString()}`}>🎮 集中ボーナス: +¥{pool.bonus.toLocaleString()}</span>
                 )}
                 {remaining !== null && (
                   <span className={remaining < 0 ? 'text-red-500 font-medium' : ''}>
@@ -822,7 +824,7 @@ function TagHeatmap({ records }: { records: FinanceRecord[] }) {
   )
 }
 
-function TimeMoneyChart({ records, timeLogs, yearMonth }: { records: FinanceRecord[]; timeLogs: FinanceViewProps['timeLogs']; yearMonth: Date }) {
+function TimeMoneyChart({ records, timeLogs, catDefs, yearMonth }: { records: FinanceRecord[]; timeLogs: FinanceViewProps['timeLogs']; catDefs: CategoryDefinition[]; yearMonth: Date }) {
   const monthStart = startOfMonth(yearMonth)
   const monthEnd = endOfMonth(yearMonth)
   const monthStr = format(yearMonth, 'yyyy-MM')
@@ -842,7 +844,10 @@ function TimeMoneyChart({ records, timeLogs, yearMonth }: { records: FinanceReco
       const day = format(new Date(tl.start_time), 'yyyy-MM-dd')
       if (day.startsWith(monthStr)) {
         const entry = days.find((d) => d.date === day)
-        if (entry) entry.bonus += Math.round((tl.duration / 60) * TIME_BONUS_RATE)
+        if (entry) {
+          const dayBonus = calcTimeBonus([tl], catDefs, day)
+          entry.bonus += dayBonus
+        }
       }
     }
 
@@ -1036,7 +1041,7 @@ function MonthlyCalendar({
 }
 
 export function FinanceView({
-  records, timeLogs, budget,
+  records, timeLogs, catDefs, budget,
   dashboardMonth, onDashboardMonthChange,
   recurringTemplates, recurringRecords, recurringIncome, recurringExpense, recurringNet,
   onAdd, onUpdate, onDelete, onUpdateBase,
@@ -1085,7 +1090,7 @@ export function FinanceView({
     return total
   }, [timeLogs, monthStr])
 
-  const timeBonus = Math.floor((monthlyFocusMinutes / 60) * TIME_BONUS_RATE)
+  const timeBonus = calcTimeBonus(timeLogs, catDefs, monthStr)
 
   const prevMonthFocusMinutes = useMemo(() => {
     let total = 0
@@ -1097,7 +1102,7 @@ export function FinanceView({
     return total
   }, [timeLogs, prevMonthStr])
 
-  const prevMonthTimeBonus = Math.floor((prevMonthFocusMinutes / 60) * TIME_BONUS_RATE)
+  const prevMonthTimeBonus = calcTimeBonus(timeLogs, catDefs, prevMonthStr)
 
   useEffect(() => {
     if (!budget) return
@@ -1174,7 +1179,7 @@ export function FinanceView({
           )}
 
           <TagHeatmap records={monthlyRecords} />
-          <TimeMoneyChart records={monthlyRecords} timeLogs={timeLogs} yearMonth={dashboardMonth} />
+          <TimeMoneyChart records={monthlyRecords} timeLogs={timeLogs} catDefs={catDefs} yearMonth={dashboardMonth} />
         </div>
       </div>
 

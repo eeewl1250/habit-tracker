@@ -9,7 +9,6 @@ import { NotesView } from './components/NotesView'
 import { MenstruationView } from './components/MenstruationView'
 import { CravingView } from './components/CravingView'
 import { SleepView } from './components/SleepView'
-import { FocusView } from './components/FocusView'
 import { FinanceView } from './components/FinanceView'
 import { DiaryView } from './components/DiaryView'
 import { HomeView } from './components/HomeView'
@@ -32,8 +31,8 @@ import { useFinance } from './hooks/useFinance'
 import { useBudget } from './hooks/useBudget'
 import { useRecurring } from './hooks/useRecurring'
 import { useDiary } from './hooks/useDiary'
-import { fetchCategories, seedDefaultCategories } from './lib/api'
-import type { Category, ViewMode, TargetPool } from './types'
+import { fetchCategories, fetchCategoryDefinitions, seedDefaultCategories } from './lib/api'
+import type { Category, CategoryDefinition, ViewMode, TargetPool } from './types'
 import type { DiarySubMode } from './components/DiaryView'
 
 function App() {
@@ -52,6 +51,7 @@ function App() {
   const [showForm, setShowForm] = useState(false)
   const [showManagement, setShowManagement] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
+  const [catDefs, setCatDefs] = useState<CategoryDefinition[]>([])
   const [diarySubMode, setDiarySubMode] = useState<DiarySubMode>('calendar')
   
   const categoryColor = useMemo(() => {
@@ -91,6 +91,7 @@ function App() {
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {})
+    fetchCategoryDefinitions().then(setCatDefs).catch(() => {})
   }, [])
 
   // Seed default category definitions on first load
@@ -109,7 +110,7 @@ function App() {
   const isHome = dates.viewMode === 'home'
   const isCraving = dates.viewMode === 'craving'
   const isSleep = dates.viewMode === 'sleep'
-  const isFocus = dates.viewMode === 'focus'
+  const isFocus = dates.viewMode === 'focus' // redirect to todo
   const isFinance = dates.viewMode === 'finance'
   const isDiary = dates.viewMode === 'diary'
   const isSchedule = dates.viewMode === 'schedule'
@@ -239,11 +240,12 @@ function App() {
         ) : dates.viewMode === 'menstruation' ? (
           <MenstruationView />
         ) : isFocus ? (
-          <FocusView timeLogs={timeLogs} baseDate={dates.baseDate} onGoToFinance={() => dates.setViewMode('finance')} />
+          <TodoView tasks={tasks.tasks} logs={logs.logs} timeLogs={timeLogs} />
         ) : isFinance ? (
           <FinanceView
             records={finance.records}
             timeLogs={timeLogs.logs}
+            catDefs={catDefs}
             budget={budget.getSettings(dashboardMonthStr)}
             dashboardMonth={dashboardMonth}
             onDashboardMonthChange={handleDashboardMonthChange}
@@ -272,7 +274,7 @@ function App() {
             onModeChange={setDiarySubMode}
           />
           ) : isTodo ? (
-            <TodoView tasks={tasks.tasks} logs={logs.logs} />
+            <TodoView tasks={tasks.tasks} logs={logs.logs} timeLogs={timeLogs} />
           ) : isCategories ? (
             <CategoryManagerPage />
           ) : isReview ? (

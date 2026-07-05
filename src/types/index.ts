@@ -4,6 +4,7 @@ export type ViewMode = 'home' | 'week' | 'month' | 'heatmap' | 'stats' | 'notes'
 
 export type TimeCategory = string
 
+/** @deprecated Use category_definitions from DB instead */
 export const TIME_CATEGORIES = [
   { key: 'job_hunting' as TimeCategory, label: '就職活動', emoji: '💼' },
   { key: 'self_growth' as TimeCategory, label: '自己投資', emoji: '📚' },
@@ -222,8 +223,6 @@ export function resolveTargetPool(base: BaseCategory, motivation: Motivation): T
   if (motivation === 'going_out') return 'going_out_pool'
   return _poolMap[base]
 }
-
-export const TIME_BONUS_RATE = 100 // ¥100 per hour of job_hunting focus
 
 export interface BudgetSettings {
   month: string
