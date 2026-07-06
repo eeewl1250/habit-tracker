@@ -392,6 +392,93 @@ function Analytics({ logs, catDefs, baseDate }: { logs: TimeLog[]; catDefs: Cate
   )
 }
 
+// ── Breadcrumb helpers ──
+
+/** Build the full ancestor chain from root to the given todo (inclusive). */
+function getBreadcrumb(todo: Todo, todos: Todo[]): Todo[] {
+  const crumbs: Todo[] = [todo]
+  let current = todo
+  const visited = new Set<string>()
+  visited.add(current.id)
+  while (current.parent_id && current.parent_id !== current.id) {
+    const parent = todos.find(t => t.id === current.parent_id)
+    if (!parent || visited.has(parent.id)) break
+    visited.add(parent.id)
+    crumbs.unshift(parent)
+    current = parent
+  }
+  return crumbs
+}
+
+/** Format a breadcrumb array into a display string. */
+function formatBreadcrumb(crumbs: Todo[], full: boolean): string {
+  if (crumbs.length <= 1) return crumbs[0]?.title ?? ''
+  if (full) {
+    return crumbs.map(c => c.title).join(' › ')
+  }
+  // Default: show only the topmost ancestor + the task name
+  return `${crumbs[0].title} › ${crumbs[crumbs.length - 1].title}`
+}
+
+interface BreadcrumbLabelProps {
+  todo: Todo
+  todos: Todo[]
+  expandedBreadcrumbs: Set<string>
+  onToggle: (id: string) => void
+  className?: string
+}
+
+function BreadcrumbLabel({ todo, todos, expandedBreadcrumbs, onToggle, className = '' }: BreadcrumbLabelProps) {
+  const crumbs = useMemo(() => getBreadcrumb(todo, todos), [todo, todos])
+  const isExpanded = expandedBreadcrumbs.has(todo.id)
+
+  if (crumbs.length <= 1) {
+    return <span className={className}>{todo.title}</span>
+  }
+
+  if (!isExpanded) {
+    // Collapsed: show only first ancestor + task name, clickable for expansion
+    return (
+      <span
+        className={`cursor-pointer ${className}`}
+        onClick={(e) => { e.stopPropagation(); onToggle(todo.id) }}
+        title="クリックで完全なパスを表示"
+      >
+        {crumbs.map((crumb, i) => {
+          const isFirst = i === 0
+          const isLast = i === crumbs.length - 1
+          if (!isFirst && !isLast) return null
+          return (
+            <span key={crumb.id}>
+              {i > 0 && <span className="text-gray-300 mx-0.5">›</span>}
+              <span className={isLast ? '' : 'text-gray-400'}>{crumb.title}</span>
+            </span>
+          )
+        })}
+      </span>
+    )
+  }
+
+  // Expanded: show full breadcrumb path, clickable for collapse
+  return (
+    <span
+      className={`cursor-pointer ${className}`}
+      onClick={(e) => { e.stopPropagation(); onToggle(todo.id) }}
+      title="クリックで折りたたむ"
+    >
+      {crumbs.map((crumb, i) => {
+        const isLast = i === crumbs.length - 1
+        return (
+          <span key={crumb.id}>
+            {i > 0 && <span className="text-gray-300 mx-0.5">›</span>}
+            <span className={isLast ? '' : 'text-gray-400'}>{crumb.title}</span>
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
 interface TodoViewProps {
   tasks: Task[]
   logs: DailyLog[]
@@ -410,8 +497,8 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const [rightCat, setRightCat] = useState<TodoCategory>(defaultCat?.name ?? '生活')
   const [untrackedSummary, setUntrackedSummary] = useState('')
   const [filterCat, setFilterCat] = useState<string>('all')
-  const [focusTab, setFocusTab] = useState<'habits' | 'schedules' | 'tasks'>('habits')
-  const [sessionTab, setSessionTab] = useState<'analytics' | 'sessions'>('analytics')
+  const [focusTab, setFocusTab] = useState<'habits' | 'schedules' | 'tasks'>('tasks')
+  const [sessionTab, setSessionTab] = useState<'analytics' | 'sessions'>('sessions')
   const [doneTab, setDoneTab] = useState<'today' | 'all'>('today')
   const [confirm, ConfirmModal] = useConfirm()
 
@@ -423,7 +510,7 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const lastTimeLogIdRef = useRef<string | null>(null)
   const [showTaskSelector, setShowTaskSelector] = useState(false)
   const [deletingTodoId, setDeletingTodoId] = useState<string | null>(null)
-  const [rightView, setRightView] = useState<'inbox' | 'project'>('inbox')
+  const [rightView, setRightView] = useState<'inbox' | 'project'>('project')
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
   const [newProjectInput, setNewProjectInput] = useState('')
   const [showNewProject, setShowNewProject] = useState(false)
@@ -441,9 +528,31 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   // Completion confirmation state
   const [confirmComplete, setConfirmComplete] = useState<{ taskId: string } | null>(null)
 
+  // Session recording confirmation when completing a task via checkbox
+  const [confirmSessionRecord, setConfirmSessionRecord] = useState<{ taskId: string; todo: Todo } | null>(null)
+
+  // Editable minutes for session recording modal
+  const [sessionMinutes, setSessionMinutes] = useState(0)
+
+  // Manual time input modal when no timer was used
+  const [manualTimeInput, setManualTimeInput] = useState<{ taskId: string; todo: Todo } | null>(null)
+  const [manualMinutes, setManualMinutes] = useState(0)
+
   // Edit modal state
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({ title: '', category: '生活', estimated_minutes: 0, actual_minutes: 0, source_url: '' })
+
+  // Breadcrumb expand/collapse state
+  const [expandedBreadcrumbs, setExpandedBreadcrumbs] = useState<Set<string>>(new Set())
+
+  const toggleBreadcrumb = useCallback((id: string) => {
+    setExpandedBreadcrumbs(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
 
   const loadTodos = useCallback(async () => {
     try {
@@ -773,6 +882,79 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
     setConfirmComplete(null)
   }, [])
 
+  /** Show session recording confirmation before completing a task from today's focus */
+  const handleTodayCheckboxClick = useCallback((todo: Todo) => {
+    if (todo.actual_minutes > 0) {
+      // Has recorded time — ask about session, initialize editable minutes
+      setSessionMinutes(todo.actual_minutes)
+      setConfirmSessionRecord({ taskId: todo.id, todo })
+    } else {
+      // No recorded time — ask for manual time input
+      setManualMinutes(0)
+      setManualTimeInput({ taskId: todo.id, todo })
+    }
+  }, [])
+
+  /** Cancel the session recording modal (close without action) */
+  const handleCancelSessionModal = useCallback(() => {
+    setConfirmSessionRecord(null)
+  }, [])
+
+  /** Complete the task without recording a session */
+  const handleCompleteWithoutSession = useCallback(async () => {
+    if (!confirmSessionRecord) return
+    await toggleDone(confirmSessionRecord.taskId, false)
+    setConfirmSessionRecord(null)
+  }, [confirmSessionRecord, toggleDone])
+
+  /** Complete the task and add a manual session entry (with editable minutes) */
+  const handleCompleteWithSession = useCallback(async () => {
+    if (!confirmSessionRecord || sessionMinutes <= 0) return
+    const { taskId, todo } = confirmSessionRecord
+    const now = new Date()
+    const startTime = new Date(now.getTime() - (sessionMinutes * 60 * 1000))
+    await timeLogs.addManual(todo.category, startTime.toISOString(), now.toISOString(), todo.title)
+    timeLogs.load(
+      format(new Date(new Date().getTime() - 31 * 86400000), 'yyyy-MM-dd'),
+      format(new Date(new Date().getTime() + 31 * 86400000), 'yyyy-MM-dd')
+    )
+    // Update actual_minutes to the edited value
+    if (sessionMinutes !== todo.actual_minutes) {
+      await updateField(taskId, { actual_minutes: sessionMinutes })
+    }
+    await toggleDone(taskId, false)
+    setConfirmSessionRecord(null)
+  }, [confirmSessionRecord, sessionMinutes, timeLogs, updateField, toggleDone])
+
+  /** Cancel the manual time input modal */
+  const handleCancelManualModal = useCallback(() => {
+    setManualTimeInput(null)
+  }, [])
+
+  /** Complete without session (from manual time input modal) */
+  const handleManualCompleteWithoutSession = useCallback(async () => {
+    if (!manualTimeInput) return
+    await toggleDone(manualTimeInput.taskId, false)
+    setManualTimeInput(null)
+  }, [manualTimeInput, toggleDone])
+
+  /** Complete with session (from manual time input modal) */
+  const handleManualCompleteWithSession = useCallback(async () => {
+    if (!manualTimeInput || manualMinutes <= 0) return
+    const { taskId, todo } = manualTimeInput
+    const now = new Date()
+    const startTime = new Date(now.getTime() - (manualMinutes * 60 * 1000))
+    await timeLogs.addManual(todo.category, startTime.toISOString(), now.toISOString(), todo.title)
+    timeLogs.load(
+      format(new Date(new Date().getTime() - 31 * 86400000), 'yyyy-MM-dd'),
+      format(new Date(new Date().getTime() + 31 * 86400000), 'yyyy-MM-dd')
+    )
+    // Also update actual_minutes on the todo so it persists
+    await updateField(taskId, { actual_minutes: manualMinutes })
+    await toggleDone(taskId, false)
+    setManualTimeInput(null)
+  }, [manualTimeInput, manualMinutes, timeLogs, updateField, toggleDone])
+
   const handleTimeLogEdit = useCallback(async (id: string, updates: Partial<{ end_time: string | null; start_time: string | null; summary: string | null; category: string }>) => {
     try {
       await updateTimeLog(id, updates)
@@ -1029,9 +1211,12 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
             {childTasks.map(child => {
               const childCat = catInfo(child.category, catDefs)
               const isDone = child.status === 'done'
+              const isInTaskPool = child.status === 'today'
               return (
                 <div key={child.id}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors group ${isDone ? 'bg-green-50/50' : 'hover:bg-gray-50'}`}>
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors group ${
+                    isDone ? 'bg-green-50/50' : isInTaskPool ? 'bg-amber-50 ring-1 ring-amber-200' : 'hover:bg-gray-50'
+                  }`}>
                   {!isDone ? (
                     <button onClick={() => toggleDone(child.id, false)}
                       className="w-3.5 h-3.5 rounded border-2 border-gray-300 flex items-center justify-center shrink-0 hover:border-blue-400 transition-colors" />
@@ -1043,14 +1228,27 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                     </button>
                   )}
                   <span className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: childCat.color }} />
-                  <span className={`text-xs flex-1 truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{child.title}</span>
+                  <span className={`text-xs flex-1 truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                    {isInTaskPool && <span className="text-amber-500 mr-1">⚡</span>}
+                    <BreadcrumbLabel
+                      todo={child}
+                      todos={todos}
+                      expandedBreadcrumbs={expandedBreadcrumbs}
+                      onToggle={toggleBreadcrumb}
+                    />
+                  </span>
                   {child.actual_minutes > 0 && (
                     <span className="text-[10px] text-gray-400">{formatMinutes(child.actual_minutes)}</span>
                   )}
                   {!isDone && (
                     <>
-                      <button onClick={() => moveToToday(child.id)}
-                        className="px-1.5 py-0.5 text-[10px] text-amber-600 hover:bg-amber-50 rounded transition-colors opacity-0 group-hover:opacity-100" title="今日に移動">⚡</button>
+                      {isInTaskPool ? (
+                        <button onClick={() => removeFromToday(child.id)}
+                          className="px-1.5 py-0.5 text-[10px] text-gray-500 hover:bg-gray-200 rounded transition-colors opacity-0 group-hover:opacity-100" title="タスクプールから戻す">⬅️ 戻す</button>
+                      ) : (
+                        <button onClick={() => moveToToday(child.id)}
+                          className="px-1.5 py-0.5 text-[10px] text-amber-600 hover:bg-amber-50 rounded transition-colors opacity-0 group-hover:opacity-100" title="今日に移動">⚡</button>
+                      )}
                       <button onClick={() => openEdit(child)}
                         className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100" title="編集">✏️</button>
                       <div className="relative inline-flex">
@@ -1121,9 +1319,9 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
             </div>
             <div className="shrink-0 flex border-b border-gray-100">
               {[
+                { key: 'tasks', label: '🎯 任务池', sub: `あと${emptySlots}件` },
                 { key: 'habits', label: '📋 习惯', sub: '自動' },
                 { key: 'schedules', label: '📅 日程', sub: '自動' },
-                { key: 'tasks', label: '🎯 任务池', sub: `あと${emptySlots}件` },
               ].map(tab => (
                 <button
                   key={tab.key}
@@ -1225,16 +1423,18 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                       <div key={todo.id} className="rounded-lg border border-gray-200 p-2.5 bg-white hover:border-gray-300 transition-colors">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => toggleDone(todo.id, false)}
+                            onClick={() => handleTodayCheckboxClick(todo)}
                             className="w-4 h-4 rounded border-2 border-gray-300 flex items-center justify-center shrink-0 hover:border-blue-400 transition-colors"
                           />
                           <div className="flex-1 min-w-0">
                             <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: cat.color }} />
                             <span className="text-xs text-gray-800">
-                              {todo.parent_id && findParent(todo.parent_id, todo.id) && (
-                                <span className="text-gray-400">📁{findParent(todo.parent_id, todo.id)!.title} ➔ </span>
-                              )}
-                              {todo.title}
+                              <BreadcrumbLabel
+                                todo={todo}
+                                todos={todos}
+                                expandedBreadcrumbs={expandedBreadcrumbs}
+                                onToggle={toggleBreadcrumb}
+                              />
                             </span>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
@@ -1272,17 +1472,17 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
           <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
             {/* View toggle */}
             <div className="shrink-0 flex border-b border-gray-100">
-              <button onClick={() => setRightView('inbox')}
-                className={`flex-1 py-2.5 text-center transition-colors text-xs font-medium ${
-                  rightView === 'inbox' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
-                }`}>
-                📥 收集箱
-              </button>
               <button onClick={() => setRightView('project')}
                 className={`flex-1 py-2.5 text-center transition-colors text-xs font-medium ${
                   rightView === 'project' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
                 }`}>
                 📁 项目看板
+              </button>
+              <button onClick={() => setRightView('inbox')}
+                className={`flex-1 py-2.5 text-center transition-colors text-xs font-medium ${
+                  rightView === 'inbox' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                📥 收集箱
               </button>
             </div>
 
@@ -1341,7 +1541,14 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                       return (
                         <div key={todo.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors group">
                           <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                          <span className="text-sm text-gray-700 flex-1 truncate">{todo.title}</span>
+                          <span className="text-sm text-gray-700 flex-1 truncate">
+                            <BreadcrumbLabel
+                              todo={todo}
+                              todos={todos}
+                              expandedBreadcrumbs={expandedBreadcrumbs}
+                              onToggle={toggleBreadcrumb}
+                            />
+                          </span>
                           <span className="text-[10px] text-gray-400 hidden sm:block"><CatIcon name={cat.emoji} />{cat.name}</span>
                           <button onClick={() => openEdit(todo)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100" title="編集">✏️</button>
                           <button onClick={() => moveToToday(todo.id)} className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors opacity-0 group-hover:opacity-100" title="今日のリストに移動">⚡</button>
@@ -1437,8 +1644,8 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
             </div>
             <div className="shrink-0 flex border-b border-gray-100">
               {[
-                { key: 'analytics', label: '📈 分析', sub: '' },
                 { key: 'sessions', label: '📋 セッション', sub: '' },
+                { key: 'analytics', label: '📈 分析', sub: '' },
               ].map(tab => (
                 <button
                   key={tab.key}
@@ -1482,11 +1689,11 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
           <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
             <div className="shrink-0 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <h3 className="text-sm font-bold text-gray-700">✅ 已完成的记录</h3>
-              {doneCount > 0 && (
+              {/* {doneCount > 0 && (
                 <button onClick={clearCompleted} className="text-xs text-gray-400 hover:text-red-500">
                   🧹 消去
                 </button>
-              )}
+              )} */}
             </div>
             <div className="shrink-0 flex border-b border-gray-100">
               {[
@@ -1526,10 +1733,12 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                       </button>
                       <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
                       <span className="text-sm text-gray-500 line-through flex-1 truncate">
-                        {todo.parent_id && findParent(todo.parent_id, todo.id) && (
-                          <span className="text-gray-400">📁{findParent(todo.parent_id, todo.id)!.title} ➔ </span>
-                        )}
-                        {todo.title}
+                        <BreadcrumbLabel
+                          todo={todo}
+                          todos={todos}
+                          expandedBreadcrumbs={expandedBreadcrumbs}
+                          onToggle={toggleBreadcrumb}
+                        />
                       </span>
                       {todo.actual_minutes > 0 && (
                         <span className="text-[10px] text-gray-400">{formatMinutes(todo.actual_minutes)}</span>
@@ -1561,10 +1770,12 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                     className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
                     <span className="text-xs text-gray-700 flex-1 truncate">
-                      {todo.parent_id && findParent(todo.parent_id, todo.id) && (
-                        <span className="text-gray-400">📁{findParent(todo.parent_id, todo.id)!.title} ➔ </span>
-                      )}
-                      {todo.title}
+                      <BreadcrumbLabel
+                        todo={todo}
+                        todos={todos}
+                        expandedBreadcrumbs={expandedBreadcrumbs}
+                        onToggle={toggleBreadcrumb}
+                      />
                     </span>
                     <span className="text-[10px] text-gray-400"><CatIcon name={cat.emoji} />{cat.name}</span>
                   </button>
@@ -1698,6 +1909,125 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                 </button>
                 <button onClick={handleCompleteTask} className="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors">
                   完了する ✓
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Session Recording Confirmation Modal ── */}
+      {confirmSessionRecord && (() => {
+        const { todo } = confirmSessionRecord
+        const cat = catInfo(todo.category, catDefs)
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-30 p-4" onClick={handleCancelSessionModal}>
+            <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">⏱️</span>
+                  <div>
+                    <div className="text-sm font-bold text-gray-800">セッションとして記録</div>
+                    <div className="text-xs text-gray-500">{todo.title}</div>
+                  </div>
+                </div>
+                <button onClick={handleCancelSessionModal} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                作業時間をセッション統計に含めますか？時間は編集できます。
+              </p>
+              <div className="flex flex-col gap-2 mb-3">
+                <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                  <CatIcon name={cat.emoji} />
+                  <span>カテゴリ: {cat.name}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                  <span>⏳</span>
+                  <span>時間（分）:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={sessionMinutes}
+                    onChange={e => setSessionMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    onClick={e => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleCompleteWithoutSession} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                  記録しないで完了
+                </button>
+                <button
+                  onClick={handleCompleteWithSession}
+                  disabled={sessionMinutes <= 0}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors ${
+                    sessionMinutes > 0
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-blue-200 text-white cursor-not-allowed'
+                  }`}
+                >
+                  記録して完了
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Manual Time Input Modal ── */}
+      {manualTimeInput && (() => {
+        const { todo } = manualTimeInput
+        const cat = catInfo(todo.category, catDefs)
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-30 p-4" onClick={handleCancelManualModal}>
+            <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">⏱️</span>
+                  <div>
+                    <div className="text-sm font-bold text-gray-800">作業時間を入力</div>
+                    <div className="text-xs text-gray-500">{todo.title}</div>
+                  </div>
+                </div>
+                <button onClick={handleCancelManualModal} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                このタスクにはタイマー記録がありません。セッション統計に含める場合、作業時間を入力してください。
+              </p>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs text-gray-600">時間（分）:</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={manualMinutes}
+                  onChange={e => setManualMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && manualMinutes > 0) {
+                      handleManualCompleteWithSession()
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleCancelManualModal} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                  キャンセル
+                </button>
+                <button onClick={handleManualCompleteWithoutSession} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                  記録せず完了
+                </button>
+                <button
+                  onClick={handleManualCompleteWithSession}
+                  disabled={manualMinutes <= 0}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors ${
+                    manualMinutes > 0
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-blue-200 text-white cursor-not-allowed'
+                  }`}
+                >
+                  記録して完了
                 </button>
               </div>
             </div>
