@@ -12,8 +12,10 @@ import type { useTimeLogs } from '../hooks/useTimeLogs'
 
 const MAX_TODAY = 5
 
-function catInfo(catName: string, catDefs: CategoryDefinition[]) {
-  return catDefs.find(c => c.name === catName) ?? catDefs[catDefs.length - 1]
+const FALLBACK_CAT: CategoryDefinition = { id: '', name: '', emoji: '📋', color: '#6B7280', bg_color: '', is_default: true, sort_order: 0, bonus_enabled: false, bonus_rate: 0, created_at: '', updated_at: '' }
+
+function catInfo(catName: string, catDefs: CategoryDefinition[]): CategoryDefinition {
+  return catDefs.find(c => c.name === catName) ?? catDefs[catDefs.length - 1] ?? FALLBACK_CAT
 }
 
 interface EditForm {
@@ -99,17 +101,12 @@ function TimelineItem({ log, catDefs, onEditSummary, onEditCategory, onEditTimes
   const [editCategory, setEditCategory] = useState(log.category)
   const [editStart, setEditStart] = useState(format(start, 'HH:mm'))
   const [editEnd, setEditEnd] = useState(end ? format(end, 'HH:mm') : '')
-  const [editingTime, setEditingTime] = useState(false)
 
   const handleSave = () => {
     onEditSummary(log.id, editSummary)
     if (editCategory !== log.category) {
       onEditCategory(log.id, editCategory)
     }
-    setEditing(false)
-  }
-
-  const handleSaveTime = () => {
     const [h1, m1] = editStart.split(':').map(Number)
     const [h2, m2] = editEnd.split(':').map(Number)
     const sy = start.getFullYear()
@@ -119,7 +116,7 @@ function TimelineItem({ log, catDefs, onEditSummary, onEditCategory, onEditTimes
       new Date(sy, sM, sd, h1, m1).toISOString(),
       new Date(sy, sM, sd, h2, m2).toISOString()
     )
-    setEditingTime(false)
+    setEditing(false)
   }
 
   return (
@@ -136,6 +133,11 @@ function TimelineItem({ log, catDefs, onEditSummary, onEditCategory, onEditTimes
           <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: catInfo_lookup.color + '20', color: catInfo_lookup.color }}>
             <CatIcon name={catInfo_lookup.emoji} /> {catInfo_lookup.name}
           </span>
+          {log.tags?.[0] && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 truncate max-w-[120px]">
+              {log.tags[0]}
+            </span>
+          )}
           <span className="text-[10px] text-gray-400">{formatDuration(duration)}</span>
           <button onClick={() => setEditing(!editing)} className="ml-auto text-gray-300 hover:text-gray-500 text-xs">
             {editing ? '✕' : '📝'}
@@ -169,30 +171,21 @@ function TimelineItem({ log, catDefs, onEditSummary, onEditCategory, onEditTimes
                 ))}
               </div>
             </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-400">時間</span>
+              <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
+                className="w-20 px-1 py-1 border border-gray-300 rounded text-[10px]" />
+              <span className="text-[10px] text-gray-400">~</span>
+              <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
+                className="w-20 px-1 py-1 border border-gray-300 rounded text-[10px]" />
+            </div>
             <div className="flex gap-1">
-              {!editingTime ? (
-                <>
-                  <button onClick={handleSave} className="px-3 py-1 bg-blue-600 text-white rounded text-[10px] font-medium hover:bg-blue-700">
-                    保存
-                  </button>
-                  <button onClick={() => setEditingTime(true)} className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-[10px] hover:bg-gray-200">
-                    時間を編集
-                  </button>
-                  <button onClick={() => onDelete(log.id)} className="px-3 py-1 bg-red-50 text-red-500 rounded text-[10px] hover:bg-red-100">
-                    削除
-                  </button>
-                </>
-              ) : (
-                <>
-                  <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
-                    className="w-20 px-1 py-1 border border-gray-300 rounded text-[10px]" />
-                  <span className="text-[10px] text-gray-400 self-center">~</span>
-                  <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
-                    className="w-20 px-1 py-1 border border-gray-300 rounded text-[10px]" />
-                  <button onClick={handleSaveTime} className="px-2 py-1 bg-blue-600 text-white rounded text-[10px]">保存</button>
-                  <button onClick={() => setEditingTime(false)} className="px-2 py-1 text-gray-500 text-[10px]">戻る</button>
-                </>
-              )}
+              <button onClick={handleSave} className="px-3 py-1 bg-blue-600 text-white rounded text-[10px] font-medium hover:bg-blue-700">
+                保存
+              </button>
+              <button onClick={() => onDelete(log.id)} className="px-3 py-1 bg-red-50 text-red-500 rounded text-[10px] hover:bg-red-100">
+                削除
+              </button>
             </div>
           </div>
         ) : (
@@ -403,6 +396,7 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const [leftCat, setLeftCat] = useState<TodoCategory>(defaultCat?.name ?? '就活')
   const [rightInput, setRightInput] = useState('')
   const [rightCat, setRightCat] = useState<TodoCategory>(defaultCat?.name ?? '生活')
+  const [untrackedSummary, setUntrackedSummary] = useState('')
   const [filterCat, setFilterCat] = useState<string>('all')
   const [focusTab, setFocusTab] = useState<'habits' | 'schedules' | 'tasks'>('habits')
   const [sessionTab, setSessionTab] = useState<'analytics' | 'sessions'>('analytics')
@@ -414,12 +408,16 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const [timerElapsed, setTimerElapsed] = useState(0)
   const timerStartRef = useRef<number>(0)
   const timerIntervalRef = useRef<number | null>(null)
+  const lastTimeLogIdRef = useRef<string | null>(null)
   const [showTaskSelector, setShowTaskSelector] = useState(false)
 
   // Summary modal state
   const [summaryModal, setSummaryModal] = useState<{
     taskId: string; minutes: number; startTime: string
   } | null>(null)
+
+  // Completion confirmation state
+  const [confirmComplete, setConfirmComplete] = useState<{ taskId: string } | null>(null)
 
   // Edit modal state
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
@@ -632,14 +630,21 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const handleGlobalStop = useCallback(() => {
     const activeLog = timeLogs.getActiveTimer()
     if (!activeLog) return
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
-    const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000)
-    const minutes = Math.max(1, Math.round(elapsed / 60))
-    setSummaryModal({
-      taskId: activeTodoId ?? 'untracked',
-      minutes,
-      startTime: activeLog.start_time,
-    })
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current)
+      const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000)
+      const minutes = Math.max(1, Math.round(elapsed / 60))
+      setSummaryModal({
+        taskId: activeTodoId ?? 'untracked',
+        minutes,
+        startTime: activeLog.start_time,
+      })
+    } else {
+      // Stale timer from previous session – stop directly
+      timeLogs.stopTimer(activeLog.id)
+      setActiveTodoId(null)
+      setTimerElapsed(0)
+    }
   }, [timeLogs, activeTodoId])
 
   const handleTimerSummarySave = useCallback(async (summary: string) => {
@@ -655,16 +660,56 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
     // Stop timer via timeLogs
     const activeLog = timeLogs.getActiveTimer()
     if (activeLog) {
-      await timeLogs.stopTimer(activeLog.id, summary || undefined)
+      const todo = taskId !== 'untracked' ? todos.find(t => t.id === taskId) : null
+      await timeLogs.stopTimer(activeLog.id, summary || undefined, todo ? [todo.title] : undefined)
+      lastTimeLogIdRef.current = activeLog.id
     }
     setActiveTodoId(null)
     setTimerElapsed(0)
     setSummaryModal(null)
+    setUntrackedSummary('')
+    // Show completion confirmation if linked to a task
+    if (taskId !== 'untracked') {
+      setConfirmComplete({ taskId })
+    }
   }, [summaryModal, todos, updateField, timeLogs])
 
   const handleTimerSummarySkip = useCallback(async () => {
     await handleTimerSummarySave('')
   }, [handleTimerSummarySave])
+
+  const handleCompleteTask = useCallback(async () => {
+    if (!confirmComplete) return
+    const { taskId } = confirmComplete
+    const todo = todos.find(t => t.id === taskId)
+    if (todo) {
+      const clue = `✅ ${todo.title}${todo.actual_minutes > 0 ? `（${todo.actual_minutes}分）` : ''}`
+      await updateField(taskId, { status: 'done', completed_at: new Date().toISOString(), diary_clue: clue })
+      // Record completion into the time_log
+      if (lastTimeLogIdRef.current && todo.actual_minutes > 0) {
+        const existing = timeLogs.logs.find(l => l.id === lastTimeLogIdRef.current)
+        if (existing) {
+          // Update summary with completion note
+          const taskInfo = `✅ 完了（${todo.actual_minutes}分）`
+          const merged = existing.summary
+            ? `${existing.summary}\n${taskInfo}`
+            : taskInfo
+          // Update tags to show completion
+          const doneTag = `✅ ${todo.title}（${todo.actual_minutes}分）`
+          await updateTimeLog(lastTimeLogIdRef.current, { summary: merged, tags: [doneTag] })
+          timeLogs.load(
+            format(new Date(new Date().getTime() - 31 * 86400000), 'yyyy-MM-dd'),
+            format(new Date(new Date().getTime() + 31 * 86400000), 'yyyy-MM-dd')
+          )
+        }
+      }
+    }
+    setConfirmComplete(null)
+  }, [confirmComplete, todos, updateField, timeLogs])
+
+  const handleSkipComplete = useCallback(() => {
+    setConfirmComplete(null)
+  }, [])
 
   const handleTimeLogEdit = useCallback(async (id: string, updates: Partial<{ end_time: string | null; start_time: string | null; summary: string | null; category: string }>) => {
     try {
@@ -1193,7 +1238,37 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
       {/* ── Summary Modal ── */}
       {summaryModal && (() => {
         const todo = todos.find(t => t.id === summaryModal.taskId)
-        if (!todo) return null
+        if (!todo) {
+          // Untracked timer – show generic summary
+          return (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-30 p-4">
+              <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">⏱️</span>
+                  <div>
+                    <div className="text-sm font-bold text-gray-800">集中を終了</div>
+                    <div className="text-xs text-gray-500">{summaryModal.minutes}分</div>
+                  </div>
+                </div>
+                <textarea
+                  autoFocus
+                  value={untrackedSummary}
+                  onChange={e => setUntrackedSummary(e.target.value)}
+                  placeholder="この時間にやったことを書こう..."
+                  className="w-full h-24 px-3 py-2 border border-gray-300 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <div className="flex gap-2 mt-3">
+                  <button onClick={handleTimerSummarySkip} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                    スキップ
+                  </button>
+                  <button onClick={() => handleTimerSummarySave(untrackedSummary)} className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors">
+                    保存
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        }
         return (
           <SummaryModal
             todo={todo}
@@ -1202,6 +1277,33 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
             onSave={handleTimerSummarySave}
             onSkip={handleTimerSummarySkip}
           />
+        )
+      })()}
+
+      {/* ── Completion Confirmation Modal ── */}
+      {confirmComplete && (() => {
+        const todo = todos.find(t => t.id === confirmComplete.taskId)
+        if (!todo) return null
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-30 p-4">
+            <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🎯</span>
+                <span className="text-sm font-bold text-gray-800">タスクを完了しますか？</span>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                「{todo.title}」の集中時間を記録しました。
+              </p>
+              <div className="flex gap-2">
+                <button onClick={handleSkipComplete} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                  時間だけ記録
+                </button>
+                <button onClick={handleCompleteTask} className="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors">
+                  完了する ✓
+                </button>
+              </div>
+            </div>
+          </div>
         )
       })()}
 

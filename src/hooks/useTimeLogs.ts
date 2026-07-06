@@ -31,9 +31,9 @@ export function useTimeLogs() {
     }
   }, [])
 
-  const stopTimer = useCallback(async (id: string, summary?: string): Promise<TimeLog | null> => {
+  const stopTimer = useCallback(async (id: string, summary?: string, tags?: string[]): Promise<TimeLog | null> => {
     try {
-      const updated = await finishTimeLog(id, new Date().toISOString(), summary)
+      const updated = await finishTimeLog(id, new Date().toISOString(), summary, tags)
       setLogs((prev) => prev.map((l) => (l.id === id ? updated : l)))
       return updated
     } catch {

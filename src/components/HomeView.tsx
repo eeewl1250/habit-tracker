@@ -21,7 +21,7 @@ const quickLinks: QuickLink[] = [
   { mode: 'week', label: '習慣', icon: '☑', desc: '週間・月間の習慣確認' },
   { mode: 'diary', label: '日記', icon: '📝', desc: '日本語日記を書く' },
   { mode: 'sleep', label: '睡眠', icon: '🛌', desc: '睡眠記録' },
-  { mode: 'focus', label: '集中', icon: '⏱', desc: '集中タイムトラッキング' },
+  { mode: 'todo', label: 'TODO', icon: '📋', desc: 'タスク管理・集中トラッキング' },
   { mode: 'finance', label: '家計簿', icon: '💰', desc: '支出管理・予算' },
   { mode: 'stats', label: '統計', icon: '📊', desc: '習慣の統計' },
   { mode: 'notes', label: 'メモ', icon: '📋', desc: 'タスクメモ一覧' },

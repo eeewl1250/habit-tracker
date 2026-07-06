@@ -41,7 +41,6 @@ const navGroups: NavGroup[] = [
       { key: 'diary', label: '日記' },
       { key: 'todo', label: 'TODO' },
       { key: 'sleep', label: '睡眠' },
-      { key: 'focus', label: '集中' },
       { key: 'craving', label: '欲望' },
       { key: 'menstruation', label: '生理' },
     ],

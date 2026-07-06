@@ -536,7 +536,7 @@ export async function updateTimeLog(
   return data
 }
 
-export async function finishTimeLog(id: string, endTime: string, summary?: string): Promise<TimeLog> {
+export async function finishTimeLog(id: string, endTime: string, summary?: string, tags?: string[]): Promise<TimeLog> {
   const { data: existing, error: fetchErr } = await supabase
     .from('time_logs')
     .select('start_time')
@@ -546,9 +546,12 @@ export async function finishTimeLog(id: string, endTime: string, summary?: strin
 
   const duration = Math.round((new Date(endTime).getTime() - new Date(existing.start_time).getTime()) / 60000)
 
+  const updates: Record<string, unknown> = { end_time: endTime, duration, summary: summary || null }
+  if (tags !== undefined) updates.tags = tags
+
   const { data, error } = await supabase
     .from('time_logs')
-    .update({ end_time: endTime, duration, summary: summary || null })
+    .update(updates)
     .eq('id', id)
     .select()
     .single()
