@@ -278,6 +278,7 @@ export type TodoCategory = string
 export interface Todo {
   id: string
   title: string
+  is_project: boolean
   category: TodoCategory
   status: TodoStatus
   estimated_minutes: number
@@ -288,14 +289,17 @@ export interface Todo {
   completed_at: string | null
   created_at: string
   updated_at: string
+  parent_id: string | null
 }
 
 export interface TodoFormData {
   title: string
+  is_project?: boolean
   category: TodoCategory
   status: TodoStatus
   estimated_minutes?: number
   source_url?: string
+  parent_id?: string | null
 }
 
 export const TODO_CATEGORIES: { key: TodoCategory; label: string; color: string; bg: string; emoji: string }[] = [

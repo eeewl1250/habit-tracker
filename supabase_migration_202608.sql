@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS todos (
   id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   title           TEXT NOT NULL,
+  is_project      BOOLEAN NOT NULL DEFAULT FALSE,
   category        TEXT NOT NULL DEFAULT 'life' CHECK (category IN ('school', 'job', 'life', 'ent', 'study')),
   status          TEXT NOT NULL DEFAULT 'backlog' CHECK (status IN ('backlog', 'today', 'done')),
   estimated_minutes INTEGER NOT NULL DEFAULT 0,

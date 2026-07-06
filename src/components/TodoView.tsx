@@ -4,8 +4,8 @@ import { ja } from 'date-fns/locale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import type { Todo, TodoCategory, TodoStatus, TimeLog, CategoryDefinition, Task, DailyLog, Schedule } from '../types'
 import { WEEKDAY_KEYS } from '../types'
-import { fetchTodos, fetchCategoryDefinitions, createTodo as apiCreateTodo, updateTodo as apiUpdateTodo, deleteTodo as apiDeleteTodo, fetchTimeLogs, updateTimeLog, deleteTimeLog, fetchSchedules, checkIn, undoCheckIn } from '../lib/api'
-import { calcTimeBonus, calcCategoryBreakdown } from '../lib/bonus'
+import { fetchTodos, fetchCategoryDefinitions, createTodo as apiCreateTodo, updateTodo as apiUpdateTodo, deleteTodo as apiDeleteTodo, updateTimeLog, deleteTimeLog, fetchSchedules, checkIn, undoCheckIn } from '../lib/api'
+import { calcTimeBonus } from '../lib/bonus'
 import { CatIcon } from './Icon'
 import { useConfirm } from '../hooks/useConfirm'
 import type { useTimeLogs } from '../hooks/useTimeLogs'
@@ -245,8 +245,6 @@ function Timeline({ logs, catDefs, onEditSummary, onEditCategory, onEditTimes, o
   )
 }
 
-const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6B7280']
-
 function Analytics({ logs, catDefs, baseDate }: { logs: TimeLog[]; catDefs: CategoryDefinition[]; baseDate: Date }) {
   const [period, setPeriod] = useState<'week' | 'month'>('week')
 
@@ -266,7 +264,7 @@ function Analytics({ logs, catDefs, baseDate }: { logs: TimeLog[]; catDefs: Cate
     })
   }, [logs, dateRange])
 
-  const { catBreakdown, defMap } = useMemo(() => {
+  const catBreakdown = useMemo(() => {
     const dm = new Map(catDefs.map(c => [c.name, c]))
     const totals = new Map<string, number>()
     for (const l of periodLogs) {
@@ -276,7 +274,7 @@ function Analytics({ logs, catDefs, baseDate }: { logs: TimeLog[]; catDefs: Cate
     const sorted = [...totals.entries()]
       .map(([name, minutes]) => ({ name, hours: Math.round(minutes / 60 * 10) / 10, color: dm.get(name)?.color ?? '#6B7280' }))
       .sort((a, b) => b.hours - a.hours)
-    return { catBreakdown: sorted, defMap: dm }
+    return sorted
   }, [periodLogs, catDefs])
 
   const topCats = catBreakdown.slice(0, 5)
@@ -356,7 +354,7 @@ function Analytics({ logs, catDefs, baseDate }: { logs: TimeLog[]; catDefs: Cate
               <XAxis dataKey="date" tick={{ fontSize: 9 }} />
               <YAxis tick={{ fontSize: 9 }} unit="h" />
               <Tooltip formatter={(value) => typeof value === 'number' ? [`${value.toFixed(1)}h`, ''] : ['', '']} contentStyle={{ fontSize: 11 }} />
-              {topCats.map((c, i) => (
+              {topCats.map((c) => (
                 <Line key={c.name} type="monotone" dataKey={c.name} stroke={c.color} strokeWidth={2} dot={{ r: 2 }} name={c.name} />
               ))}
               {otherHours > 0 && (
@@ -403,7 +401,6 @@ interface TodoViewProps {
 export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const [catDefs, setCatDefs] = useState<CategoryDefinition[]>([])
   const [todos, setTodos] = useState<Todo[]>([])
-  const [loading, setLoading] = useState(true)
 
   // Input states (default to first non-default category)
   const defaultCat = catDefs.find(c => !c.is_default)
@@ -426,6 +423,15 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const lastTimeLogIdRef = useRef<string | null>(null)
   const [showTaskSelector, setShowTaskSelector] = useState(false)
   const [deletingTodoId, setDeletingTodoId] = useState<string | null>(null)
+  const [rightView, setRightView] = useState<'inbox' | 'project'>('inbox')
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
+  const [newProjectInput, setNewProjectInput] = useState('')
+  const [showNewProject, setShowNewProject] = useState(false)
+  const [childCreateModal, setChildCreateModal] = useState<{
+    parent: Todo
+    kind: 'task' | 'project'
+    title: string
+  } | null>(null)
 
   // Summary modal state
   const [summaryModal, setSummaryModal] = useState<{
@@ -437,17 +443,14 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
 
   // Edit modal state
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ title: '', category: 'life', estimated_minutes: 0, source_url: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ title: '', category: '生活', estimated_minutes: 0, actual_minutes: 0, source_url: '' })
 
   const loadTodos = useCallback(async () => {
-    setLoading(true)
     try {
       const data = await fetchTodos()
       setTodos(data)
     } catch (e) {
       console.error('Failed to load todos', e)
-    } finally {
-      setLoading(false)
     }
   }, [])
 
@@ -468,7 +471,6 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const todayHabits = (() => {
     const today = new Date()
     const dayOfWeek = today.getDay()
-    const todayStr = format(today, 'yyyy-MM-dd')
     return tasks.filter(t => {
       if (t.status !== 'active') return false
       if (t.period_type === 'weekday') {
@@ -513,19 +515,55 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
     )
   }, [schedules])
 
-  const addTodo = useCallback(async (title: string, status: TodoStatus, category: TodoCategory) => {
+  const addTodo = useCallback(async (title: string, status: TodoStatus, category: TodoCategory, parent_id?: string | null) => {
     if (!title.trim()) return
     try {
       const todo = await apiCreateTodo({
         title: title.trim(),
         category,
         status,
+        parent_id: parent_id ?? null,
       })
       setTodos(prev => [todo, ...prev])
     } catch (e) {
       console.error('Failed to add todo', e)
     }
   }, [])
+
+  const addProject = useCallback(async (title: string, category: TodoCategory, parentProjectId?: string) => {
+    if (!title.trim()) return
+    try {
+      const project = await apiCreateTodo({
+        title: title.trim(),
+        is_project: true,
+        category,
+        status: 'backlog',
+        parent_id: parentProjectId ?? null,
+      })
+      setTodos(prev => [{ ...project, is_project: true }, ...prev])
+      setExpandedProjects(prev => {
+        const next = new Set(prev)
+        if (parentProjectId) next.add(parentProjectId)
+        next.add(project.id)
+        return next
+      })
+    } catch (e) {
+      console.error('Failed to add project', e)
+    }
+  }, [])
+
+  const submitChildCreate = useCallback(async () => {
+    if (!childCreateModal) return
+    const title = childCreateModal.title.trim()
+    if (!title) return
+
+    if (childCreateModal.kind === 'project') {
+      await addProject(title, childCreateModal.parent.category, childCreateModal.parent.id)
+    } else {
+      await addTodo(title, 'backlog', childCreateModal.parent.category, childCreateModal.parent.id)
+    }
+    setChildCreateModal(null)
+  }, [childCreateModal, addProject, addTodo])
 
   const updateField = useCallback(async (id: string, updates: Partial<Todo>) => {
     try {
@@ -543,7 +581,7 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
     } catch (e) {
       console.error('Failed to delete todo', e)
     }
-  }, [todos])
+  }, [])
 
   const toggleDone = useCallback(async (id: string, isDone: boolean) => {
     const todo = todos.find(t => t.id === id)
@@ -674,8 +712,7 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
 
   const handleTimerSummarySave = useCallback(async (summary: string) => {
     if (!summaryModal) return
-    const { taskId, minutes, startTime } = summaryModal
-    const endTime = new Date().toISOString()
+    const { taskId, minutes } = summaryModal
     // Update actual_minutes if linked to a todo
     if (taskId !== 'untracked') {
       await updateField(taskId, {
@@ -826,7 +863,6 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const todayTodos = todos.filter(t => t.status === 'today').sort((a, b) => a.sort_order - b.sort_order)
   const emptySlots = MAX_TODAY - todayTodos.length
   const doneCount = todos.filter(t => t.status === 'done').length
-  const totalCount = todos.filter(t => t.status !== 'done').length + doneCount
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const doneTodos = todos.filter(t => t.status === 'done')
   const todayDoneTodos = doneTodos.filter(t => t.completed_at?.startsWith(todayStr)).sort((a, b) => {
@@ -841,9 +877,60 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   }), [doneTodos])
 
   const backlogTodos = todos.filter(t => t.status === 'backlog')
+
+  // parent_id → children map for project feature
+  const childrenByParent = useMemo(() => {
+    const map = new Map<string, Todo[]>()
+    todos.forEach(t => {
+      if (t.parent_id && t.parent_id !== t.id) {
+        const arr = map.get(t.parent_id) ?? []
+        arr.push(t)
+        map.set(t.parent_id, arr)
+      }
+    })
+    return map
+  }, [todos])
+
+  const isProjectTodo = useCallback(
+    (todo: Todo) => Boolean(todo.is_project) || childrenByParent.has(todo.id),
+    [childrenByParent]
+  )
+
+  const projectTodos = useMemo(
+    () => backlogTodos.filter(t => isProjectTodo(t)),
+    [backlogTodos, isProjectTodo]
+  )
+
+  const projectIdSet = useMemo(
+    () => new Set(projectTodos.map(t => t.id)),
+    [projectTodos]
+  )
+
+  const rootProjectTodos = useMemo(
+    () => projectTodos.filter(t => !t.parent_id || t.parent_id === t.id || !projectIdSet.has(t.parent_id)),
+    [projectTodos, projectIdSet]
+  )
+
+  const standaloneBacklog = useMemo(
+    () => backlogTodos.filter(t => !isProjectTodo(t) && !t.parent_id),
+    [backlogTodos, isProjectTodo]
+  )
+
+  const findParent = useCallback(
+    (parentId: string, childId?: string) => {
+      if (childId && parentId === childId) return undefined
+      return todos.find(t => t.id === parentId)
+    },
+    [todos]
+  )
+
   const filteredBacklog = filterCat === 'all'
-    ? backlogTodos
-    : backlogTodos.filter(t => t.category === filterCat)
+    ? standaloneBacklog
+    : standaloneBacklog.filter(t => t.category === filterCat)
+
+  const filteredProjects = filterCat === 'all'
+    ? rootProjectTodos
+    : rootProjectTodos.filter(t => t.category === filterCat)
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -874,6 +961,121 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
       ))}
     </select>
   )
+
+  const renderProjectNode = (project: Todo, depth = 0) => {
+    const cat = catInfo(project.category, catDefs)
+    const children = childrenByParent.get(project.id) ?? []
+    const childProjects = children.filter(c => isProjectTodo(c))
+    const childTasks = children.filter(c => !isProjectTodo(c))
+    const totalChildren = childTasks.length
+    const doneChildren = childTasks.filter(c => c.status === 'done').length
+    const progressPct = totalChildren > 0 ? Math.round((doneChildren / totalChildren) * 100) : 0
+    const isExpanded = expandedProjects.has(project.id)
+    const totalFocusMinutes = children.reduce((s, c) => s + (c.actual_minutes ?? 0), 0)
+
+    return (
+      <div key={project.id}>
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+          onClick={() => {
+            const next = new Set(expandedProjects)
+            if (isExpanded) next.delete(project.id)
+            else next.add(project.id)
+            setExpandedProjects(next)
+          }}>
+          <span className="text-[10px] text-gray-400 w-3 text-center shrink-0">{isExpanded ? '▽' : '▷'}</span>
+          <span className="text-xs font-medium text-gray-800 flex-1 truncate" style={{ color: cat.color }}>{project.title}</span>
+          <span className="text-[10px] text-gray-400 hidden sm:block"><CatIcon name={cat.emoji} />{cat.name}</span>
+          <div className="w-10 h-1.5 bg-gray-100 rounded-full overflow-hidden shrink-0">
+            <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progressPct}%`, backgroundColor: cat.color }} />
+          </div>
+          <span className="text-[10px] text-gray-500 w-7 text-right shrink-0">{progressPct}%</span>
+          <button
+            onClick={e => { e.stopPropagation(); openEdit(project) }}
+            className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500 transition-colors"
+            title="项目编辑"
+          >✏️</button>
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              setChildCreateModal({ parent: project, kind: 'task', title: '' })
+            }}
+            className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-emerald-600 transition-colors"
+            title="新增子项"
+          >＋</button>
+          <div className="relative inline-flex" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setDeletingTodoId(project.id)}
+              className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-red-500 transition-colors"
+              title="项目削除"
+            >✕</button>
+            {deletingTodoId === project.id && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex items-center gap-1.5 z-20 whitespace-nowrap">
+                <span className="text-[10px] text-gray-600">项目ごと削除しますか？</span>
+                <button onClick={() => { deleteTodo(project.id); setDeletingTodoId(null) }} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] font-medium hover:bg-red-600">OK</button>
+                <button onClick={() => setDeletingTodoId(null)} className="px-2 py-0.5 border border-gray-300 rounded text-[10px] text-gray-600 hover:bg-gray-50">キャンセル</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="pl-2 space-y-0.5 border-l border-gray-100 ml-3">
+            {totalFocusMinutes > 0 && (
+              <div className="text-[10px] text-gray-400 mb-1 px-2 pt-1">
+                ⏳ 累積集中時間: {formatMinutes(totalFocusMinutes)}
+              </div>
+            )}
+
+            {childTasks.map(child => {
+              const childCat = catInfo(child.category, catDefs)
+              const isDone = child.status === 'done'
+              return (
+                <div key={child.id}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors group ${isDone ? 'bg-green-50/50' : 'hover:bg-gray-50'}`}>
+                  {!isDone ? (
+                    <button onClick={() => toggleDone(child.id, false)}
+                      className="w-3.5 h-3.5 rounded border-2 border-gray-300 flex items-center justify-center shrink-0 hover:border-blue-400 transition-colors" />
+                  ) : (
+                    <button onClick={() => toggleDone(child.id, true)}
+                      className="w-3.5 h-3.5 rounded border-2 border-green-400 bg-green-400 text-white flex items-center justify-center shrink-0"
+                      title="未完了に戻す">
+                      <span className="text-[9px]">✓</span>
+                    </button>
+                  )}
+                  <span className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: childCat.color }} />
+                  <span className={`text-xs flex-1 truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{child.title}</span>
+                  {child.actual_minutes > 0 && (
+                    <span className="text-[10px] text-gray-400">{formatMinutes(child.actual_minutes)}</span>
+                  )}
+                  {!isDone && (
+                    <>
+                      <button onClick={() => moveToToday(child.id)}
+                        className="px-1.5 py-0.5 text-[10px] text-amber-600 hover:bg-amber-50 rounded transition-colors opacity-0 group-hover:opacity-100" title="今日に移動">⚡</button>
+                      <button onClick={() => openEdit(child)}
+                        className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100" title="編集">✏️</button>
+                      <div className="relative inline-flex">
+                        <button onClick={() => setDeletingTodoId(child.id)}
+                          className="px-1 py-0.5 text-[10px] text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="削除">✕</button>
+                        {deletingTodoId === child.id && (
+                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex items-center gap-1.5 z-20 whitespace-nowrap">
+                            <span className="text-[10px] text-gray-600">削除しますか？</span>
+                            <button onClick={() => { deleteTodo(child.id); setDeletingTodoId(null) }} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] font-medium hover:bg-red-600">OK</button>
+                            <button onClick={() => setDeletingTodoId(null)} className="px-2 py-0.5 border border-gray-300 rounded text-[10px] text-gray-600 hover:bg-gray-50">キャンセル</button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+
+            {childProjects.map(childProject => renderProjectNode(childProject, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col bg-gray-50 h-full">
@@ -1028,7 +1230,12 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                           />
                           <div className="flex-1 min-w-0">
                             <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: cat.color }} />
-                            <span className="text-xs text-gray-800">{todo.title}</span>
+                            <span className="text-xs text-gray-800">
+                              {todo.parent_id && findParent(todo.parent_id, todo.id) && (
+                                <span className="text-gray-400">📁{findParent(todo.parent_id, todo.id)!.title} ➔ </span>
+                              )}
+                              {todo.title}
+                            </span>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
                             <button onClick={() => startTimerOnTodo(todo.id)}
@@ -1061,81 +1268,166 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
             </div>
           </div>
 
-          {/* ── Column 2: 受信箱 & バックログ ── */}
+          {/* ── Column 2: 受信箱 & バックログ / プロジェクト看板 ── */}
           <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden">
-            <div className="shrink-0 p-4 pb-0 space-y-3">
-              <h3 className="text-sm font-bold text-gray-700">📥 受信箱 & バックログ</h3>
-              <div className="flex gap-1">
-                <CatSelect value={rightCat} onChange={setRightCat} />
-                <input
-                  value={rightInput}
-                  onChange={e => setRightInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && rightInput.trim()) {
-                      addTodo(rightInput, 'backlog', rightCat)
-                      setRightInput('')
-                    }
-                  }}
-                  placeholder="新しいアイデア/タスクを収集..."
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-                <button
-                  onClick={() => { if (rightInput.trim()) { addTodo(rightInput, 'backlog', rightCat); setRightInput('') } }}
-                  className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  収集
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1 pb-2">
-                {[
-                  { name: 'all', emoji: '', color: '#6B7280', bg_color: '' } as CategoryDefinition,
-                  ...catDefs,
-                ].map(cat => (
-                  <button
-                    key={cat.name}
-                    onClick={() => setFilterCat(cat.name)}
-                    className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                      filterCat === cat.name
-                        ? 'text-white font-medium'
-                        : 'text-gray-600 hover:bg-gray-100 bg-gray-50'
-                    }`}
-                    style={filterCat === cat.name ? { backgroundColor: cat.color || '#6B7280' } : {}}
-                  >
-                    {cat.name !== 'all' && <><CatIcon name={cat.emoji} /> </>}{cat.name === 'all' ? 'すべて' : cat.name}
-                  </button>
-                ))}
-              </div>
+            {/* View toggle */}
+            <div className="shrink-0 flex border-b border-gray-100">
+              <button onClick={() => setRightView('inbox')}
+                className={`flex-1 py-2.5 text-center transition-colors text-xs font-medium ${
+                  rightView === 'inbox' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                📥 收集箱
+              </button>
+              <button onClick={() => setRightView('project')}
+                className={`flex-1 py-2.5 text-center transition-colors text-xs font-medium ${
+                  rightView === 'project' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                📁 项目看板
+              </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-4 pb-4">
-              <div className="space-y-1.5">
-                {filteredBacklog.length === 0 ? (
-                  <div className="text-xs text-gray-400 text-center py-8">
-                    {filterCat === 'all' ? 'バックログは空です。' : 'このカテゴリのタスクはありません。'}
+
+            {rightView === 'inbox' ? (
+              <>
+                <div className="shrink-0 p-4 pb-0 space-y-3">
+                  <div className="flex gap-1">
+                    <CatSelect value={rightCat} onChange={setRightCat} />
+                    <input
+                      value={rightInput}
+                      onChange={e => setRightInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && rightInput.trim()) {
+                          addTodo(rightInput, 'backlog', rightCat)
+                          setRightInput('')
+                        }
+                      }}
+                      placeholder="新しいアイデア/タスクを収集..."
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <button
+                      onClick={() => { if (rightInput.trim()) { addTodo(rightInput, 'backlog', rightCat); setRightInput('') } }}
+                      className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      収集
+                    </button>
                   </div>
-                ) : filteredBacklog.map(todo => {
-                  const cat = catInfo(todo.category, catDefs)
-                  return (
-                    <div key={todo.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors group">
-                      <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                      <span className="text-sm text-gray-700 flex-1 truncate">{todo.title}</span>
-                      <span className="text-[10px] text-gray-400 hidden sm:block"><CatIcon name={cat.emoji} />{cat.name}</span>
-                      <button onClick={() => openEdit(todo)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100" title="編集">✏️</button>
-                      <button onClick={() => moveToToday(todo.id)} className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors opacity-0 group-hover:opacity-100" title="今日のリストに移動">⚡</button>
-                      <div className="relative inline-flex">
-                        <button onClick={() => setDeletingTodoId(todo.id)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="削除">✕</button>
-                        {deletingTodoId === todo.id && (
-                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex items-center gap-1.5 z-20 whitespace-nowrap">
-                            <span className="text-[10px] text-gray-600">削除しますか？</span>
-                            <button onClick={() => { deleteTodo(todo.id); setDeletingTodoId(null) }} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] font-medium hover:bg-red-600">OK</button>
-                            <button onClick={() => setDeletingTodoId(null)} className="px-2 py-0.5 border border-gray-300 rounded text-[10px] text-gray-600 hover:bg-gray-50">キャンセル</button>
-                          </div>
-                        )}
+                  <div className="flex flex-wrap gap-1 pb-2">
+                    {[
+                      { name: 'all', emoji: '', color: '#6B7280', bg_color: '' } as CategoryDefinition,
+                      ...catDefs,
+                    ].map(cat => (
+                      <button
+                        key={cat.name}
+                        onClick={() => setFilterCat(cat.name)}
+                        className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                          filterCat === cat.name
+                            ? 'text-white font-medium'
+                            : 'text-gray-600 hover:bg-gray-100 bg-gray-50'
+                        }`}
+                        style={filterCat === cat.name ? { backgroundColor: cat.color || '#6B7280' } : {}}
+                      >
+                        {cat.name !== 'all' && <><CatIcon name={cat.emoji} /> </>}{cat.name === 'all' ? 'すべて' : cat.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-4 pb-4">
+                  <div className="space-y-1.5">
+                    {filteredBacklog.length === 0 ? (
+                      <div className="text-xs text-gray-400 text-center py-8">
+                        {filterCat === 'all' ? 'バックログは空です。' : 'このカテゴリのタスクはありません。'}
                       </div>
-                    </div>
-                  )
-                })}
+                    ) : filteredBacklog.map(todo => {
+                      const cat = catInfo(todo.category, catDefs)
+                      return (
+                        <div key={todo.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                          <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                          <span className="text-sm text-gray-700 flex-1 truncate">{todo.title}</span>
+                          <span className="text-[10px] text-gray-400 hidden sm:block"><CatIcon name={cat.emoji} />{cat.name}</span>
+                          <button onClick={() => openEdit(todo)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100" title="編集">✏️</button>
+                          <button onClick={() => moveToToday(todo.id)} className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors opacity-0 group-hover:opacity-100" title="今日のリストに移動">⚡</button>
+                          <div className="relative inline-flex">
+                            <button onClick={() => setDeletingTodoId(todo.id)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="削除">✕</button>
+                            {deletingTodoId === todo.id && (
+                              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex items-center gap-1.5 z-20 whitespace-nowrap">
+                                <span className="text-[10px] text-gray-600">削除しますか？</span>
+                                <button onClick={() => { deleteTodo(todo.id); setDeletingTodoId(null) }} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] font-medium hover:bg-red-600">OK</button>
+                                <button onClick={() => setDeletingTodoId(null)} className="px-2 py-0.5 border border-gray-300 rounded text-[10px] text-gray-600 hover:bg-gray-50">キャンセル</button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* ── 项目看板 ── */
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {/* New project button */}
+                {showNewProject ? (
+                  <div className="flex gap-1">
+                    <CatSelect value={rightCat} onChange={setRightCat} />
+                    <input
+                      value={newProjectInput}
+                      onChange={e => setNewProjectInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newProjectInput.trim()) {
+                          addProject(newProjectInput, rightCat)
+                          setNewProjectInput('')
+                          setShowNewProject(false)
+                        }
+                      }}
+                      placeholder="プロジェクト名を入力..."
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      autoFocus
+                    />
+                    <button onClick={() => {
+                      if (newProjectInput.trim()) {
+                        addProject(newProjectInput, rightCat)
+                        setNewProjectInput('')
+                        setShowNewProject(false)
+                      }
+                    }} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">作成</button>
+                    <button onClick={() => { setShowNewProject(false); setNewProjectInput('') }}
+                      className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowNewProject(true)}
+                    className="w-full py-2 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors">
+                    ➕ 新建项目
+                  </button>
+                )}
+
+                {/* Category filter */}
+                <div className="flex flex-wrap gap-1 pb-1">
+                  {[
+                    { name: 'all', emoji: '', color: '#6B7280', bg_color: '' } as CategoryDefinition,
+                    ...catDefs,
+                  ].map(cat => (
+                    <button
+                      key={cat.name}
+                      onClick={() => setFilterCat(cat.name)}
+                      className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                        filterCat === cat.name
+                          ? 'text-white font-medium'
+                          : 'text-gray-600 hover:bg-gray-100 bg-gray-50'
+                      }`}
+                      style={filterCat === cat.name ? { backgroundColor: cat.color || '#6B7280' } : {}}
+                    >
+                      {cat.name !== 'all' && <><CatIcon name={cat.emoji} /> </>}{cat.name === 'all' ? 'すべて' : cat.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Project cards */}
+                {filteredProjects.length === 0 ? (
+                  <div className="text-xs text-gray-400 text-center py-8">
+                    {filterCat === 'all' ? 'プロジェクトがありません。新しいプロジェクトを作成してください。' : 'このカテゴリのプロジェクトはありません。'}
+                  </div>
+                ) : filteredProjects.map(project => renderProjectNode(project))}
               </div>
-            </div>
+            )}
           </div>
 
           {/* ── Column 3: 今日のセッションとデータ統計 ── */}
@@ -1233,7 +1525,12 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                         <span className="text-[10px]">✓</span>
                       </button>
                       <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                      <span className="text-sm text-gray-500 line-through flex-1 truncate">{todo.title}</span>
+                      <span className="text-sm text-gray-500 line-through flex-1 truncate">
+                        {todo.parent_id && findParent(todo.parent_id, todo.id) && (
+                          <span className="text-gray-400">📁{findParent(todo.parent_id, todo.id)!.title} ➔ </span>
+                        )}
+                        {todo.title}
+                      </span>
                       {todo.actual_minutes > 0 && (
                         <span className="text-[10px] text-gray-400">{formatMinutes(todo.actual_minutes)}</span>
                       )}
@@ -1263,7 +1560,12 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                   <button key={todo.id} onClick={() => handleGlobalStartWithTodo(todo)}
                     className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
-                    <span className="text-xs text-gray-700 flex-1 truncate">{todo.title}</span>
+                    <span className="text-xs text-gray-700 flex-1 truncate">
+                      {todo.parent_id && findParent(todo.parent_id, todo.id) && (
+                        <span className="text-gray-400">📁{findParent(todo.parent_id, todo.id)!.title} ➔ </span>
+                      )}
+                      {todo.title}
+                    </span>
                     <span className="text-[10px] text-gray-400"><CatIcon name={cat.emoji} />{cat.name}</span>
                   </button>
                 )
@@ -1280,6 +1582,52 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Child Create Modal ── */}
+      {childCreateModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4" onClick={() => setChildCreateModal(null)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold text-gray-800">➕ 子项を追加</span>
+              <button onClick={() => setChildCreateModal(null)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+            </div>
+            <div className="text-xs text-gray-500 mb-3">
+              親项目: <span className="text-gray-700 font-medium">{childCreateModal.parent.title}</span>
+            </div>
+            <div className="flex gap-1 mb-3">
+              <button
+                onClick={() => setChildCreateModal(prev => prev ? { ...prev, kind: 'task' } : prev)}
+                className={`flex-1 py-2 text-xs rounded-lg border transition-colors ${childCreateModal.kind === 'task' ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              >子任务</button>
+              <button
+                onClick={() => setChildCreateModal(prev => prev ? { ...prev, kind: 'project' } : prev)}
+                className={`flex-1 py-2 text-xs rounded-lg border transition-colors ${childCreateModal.kind === 'project' ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              >子项目</button>
+            </div>
+            <input
+              autoFocus
+              value={childCreateModal.title}
+              onChange={e => setChildCreateModal(prev => prev ? { ...prev, title: e.target.value } : prev)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') submitChildCreate()
+              }}
+              placeholder={childCreateModal.kind === 'project' ? '子项目名...' : '子任务名...'}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <div className="text-[10px] text-gray-400 mt-2">
+              分类会自动继承父项目: {childCreateModal.parent.category}
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setChildCreateModal(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                取消
+              </button>
+              <button onClick={submitChildCreate} className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors">
+                新建
+              </button>
             </div>
           </div>
         </div>

@@ -858,29 +858,79 @@ export async function fetchTodos(): Promise<Todo[]> {
     .select('*')
     .order('sort_order', { ascending: true })
   if (error) throw error
-  return data ?? []
+  return (data ?? []).map((t) => ({
+    ...t,
+    is_project: Boolean((t as { is_project?: boolean }).is_project),
+  }))
+}
+
+function isMissingTodoParentIdColumnError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const err = error as { code?: string; message?: string }
+  const msg = typeof err.message === 'string' ? err.message.toLowerCase() : ''
+  return (
+    err.code === 'PGRST204' &&
+    msg.includes('parent_id') &&
+    msg.includes('todos')
+  )
+}
+
+function isMissingTodoIsProjectColumnError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const err = error as { code?: string; message?: string }
+  const msg = typeof err.message === 'string' ? err.message.toLowerCase() : ''
+  return (
+    err.code === 'PGRST204' &&
+    msg.includes('is_project') &&
+    msg.includes('todos')
+  )
 }
 
 export async function createTodo(form: TodoFormData): Promise<Todo> {
-  const { data, error } = await supabase
+  const payload = {
+    title: form.title,
+    is_project: form.is_project ?? false,
+    category: form.category,
+    status: form.status,
+    estimated_minutes: form.estimated_minutes ?? 0,
+    source_url: form.source_url || null,
+    parent_id: form.parent_id || null,
+  }
+
+  const firstTry = await supabase
     .from('todos')
-    .insert({
-      title: form.title,
-      category: form.category,
-      status: form.status,
-      estimated_minutes: form.estimated_minutes ?? 0,
-      source_url: form.source_url || null,
-    })
+    .insert(payload)
     .select()
     .single()
-  if (error) throw error
-  return data
+
+  if (!firstTry.error) return firstTry.data
+
+  const fallbackPayload = { ...payload }
+  if (isMissingTodoParentIdColumnError(firstTry.error)) {
+    delete (fallbackPayload as { parent_id?: string | null }).parent_id
+  }
+  if (isMissingTodoIsProjectColumnError(firstTry.error)) {
+    delete (fallbackPayload as { is_project?: boolean }).is_project
+  }
+
+  if (Object.keys(fallbackPayload).length === Object.keys(payload).length) {
+    throw firstTry.error
+  }
+
+  const retry = await supabase
+    .from('todos')
+    .insert(fallbackPayload)
+    .select()
+    .single()
+  if (retry.error) throw retry.error
+  return retry.data
 }
 
 export async function updateTodo(
   id: string,
   updates: Partial<{
     title: string
+    is_project: boolean
     category: TodoCategory
     status: TodoStatus
     estimated_minutes: number
@@ -889,10 +939,12 @@ export async function updateTodo(
     diary_clue: string | null
     sort_order: number
     completed_at: string | null
+    parent_id: string | null
   }>
 ): Promise<Todo> {
   const payload: Record<string, unknown> = {}
   if (updates.title !== undefined) payload.title = updates.title
+  if (updates.is_project !== undefined) payload.is_project = updates.is_project
   if (updates.category !== undefined) payload.category = updates.category
   if (updates.status !== undefined) payload.status = updates.status
   if (updates.estimated_minutes !== undefined) payload.estimated_minutes = updates.estimated_minutes
@@ -901,15 +953,37 @@ export async function updateTodo(
   if (updates.diary_clue !== undefined) payload.diary_clue = updates.diary_clue
   if (updates.sort_order !== undefined) payload.sort_order = updates.sort_order
   if (updates.completed_at !== undefined) payload.completed_at = updates.completed_at
+  if (updates.parent_id !== undefined) payload.parent_id = updates.parent_id
 
-  const { data, error } = await supabase
+  const firstTry = await supabase
     .from('todos')
     .update(payload)
     .eq('id', id)
     .select()
     .single()
-  if (error) throw error
-  return data
+  if (!firstTry.error) return firstTry.data
+
+  let canRetry = false
+  if (isMissingTodoParentIdColumnError(firstTry.error) && 'parent_id' in payload) {
+    delete payload.parent_id
+    canRetry = true
+  }
+  if (isMissingTodoIsProjectColumnError(firstTry.error) && 'is_project' in payload) {
+    delete payload.is_project
+    canRetry = true
+  }
+  if (!canRetry) {
+    throw firstTry.error
+  }
+
+  const retry = await supabase
+    .from('todos')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single()
+  if (retry.error) throw retry.error
+  return retry.data
 }
 
 export async function deleteTodo(id: string): Promise<void> {
