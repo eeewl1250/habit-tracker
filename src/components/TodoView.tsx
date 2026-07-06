@@ -467,6 +467,15 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
       return false
     })
   })()
+  const habitsByCat = useMemo(() => {
+    const groups: Record<string, Task[]> = {}
+    todayHabits.forEach(task => {
+      const key = task.category
+      if (!groups[key]) groups[key] = []
+      groups[key].push(task)
+    })
+    return groups
+  }, [todayHabits])
 
   const todayLogsSet = new Set(logs.filter(l => l.date === format(new Date(), 'yyyy-MM-dd')).map(l => l.task_id))
 
@@ -512,13 +521,15 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   }, [])
 
   const deleteTodo = useCallback(async (id: string) => {
+    const todo = todos.find(t => t.id === id)
+    if (!await confirm(`「${todo?.title ?? ''}」を削除しますか？`)) return
     try {
       await apiDeleteTodo(id)
       setTodos(prev => prev.filter(t => t.id !== id))
     } catch (e) {
       console.error('Failed to delete todo', e)
     }
-  }, [])
+  }, [todos])
 
   const toggleDone = useCallback(async (id: string, isDone: boolean) => {
     const todo = todos.find(t => t.id === id)
@@ -763,11 +774,17 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
 
   const clearCompleted = useCallback(async () => {
     const doneTodos = todos.filter(t => t.status === 'done')
+    if (doneTodos.length === 0) return
+    if (!await confirm(`完了済みタスク ${doneTodos.length} 件をすべて削除しますか？`)) return
     for (const t of doneTodos) {
-      await deleteTodo(t.id)
+      try {
+        await apiDeleteTodo(t.id)
+      } catch (e) {
+        console.error('Failed to delete todo', e)
+      }
     }
     setTodos(prev => prev.filter(t => t.status !== 'done'))
-  }, [todos, deleteTodo])
+  }, [todos])
 
   const openEdit = useCallback((todo: Todo) => {
     setEditForm({
@@ -908,28 +925,38 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
             </div>
             <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
               {focusTab === 'habits' && (
-                <div className="space-y-1 pt-3">
+                <div className="space-y-3 pt-3">
                   {todayHabits.length === 0 ? (
-                    <p className="text-xs text-gray-300 py-1">今日の習慣はありません</p>
-                  ) : todayHabits.map(task => {
-                    const done = todayLogsSet.has(task.id)
+                    <p className="text-xs text-gray-300 py-1 text-center">今日の習慣はありません</p>
+                  ) : Object.entries(habitsByCat).map(([catName, tasks]) => {
+                    const cat = catInfo(catName, catDefs)
                     return (
-                      <button
-                        key={task.id}
-                        onClick={() => handleHabitToggle(task.id)}
-                        className={`flex items-center gap-2 w-full text-left p-2 rounded-lg transition-colors ${
-                          done ? 'bg-green-50' : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                          done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'
-                        }`}>
-                          {done && <span className="text-[10px]">✓</span>}
-                        </span>
-                        <span className={`text-xs ${done ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                          {task.name}
-                        </span>
-                      </button>
+                      <div key={catName}>
+                        <div className="sticky top-0 z-10 -mx-4 px-4 py-1.5 text-xs font-bold border-b flex items-center gap-1"
+                          style={{ backgroundColor: cat.color + '15', color: cat.color, borderColor: cat.color + '30' }}>
+                          <CatIcon name={cat.emoji} />
+                          <span>{cat.name}</span>
+                          <span className="ml-auto text-[10px] opacity-60">{tasks.length}</span>
+                        </div>
+                        {tasks.map(task => {
+                          const done = todayLogsSet.has(task.id)
+                          return (
+                            <button key={task.id} onClick={() => handleHabitToggle(task.id)}
+                              className={`flex items-center gap-2 w-full text-left p-2 rounded-lg transition-colors ${
+                                done ? 'bg-green-50' : 'hover:bg-gray-50'
+                              }`}>
+                              <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'
+                              }`}>
+                                {done && <span className="text-[10px]">✓</span>}
+                              </span>
+                              <span className={`text-xs ${done ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                                {task.name}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     )
                   })}
                 </div>

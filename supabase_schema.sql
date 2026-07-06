@@ -111,7 +111,7 @@ CREATE POLICY "allow_all" ON craving_logs USING (true) WITH CHECK (true);
 -- 時間トラッキング（就活/自己投資の集中記録）
 CREATE TABLE IF NOT EXISTS time_logs (
   id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  category   TEXT NOT NULL CHECK (category IN ('job_hunting', 'self_growth')),
+  category   TEXT NOT NULL CHECK (category IN ('就活', '学習', '生活', '趣味', '健康', 'その他')),
   start_time TIMESTAMPTZ NOT NULL,
   end_time   TIMESTAMPTZ,
   duration   INTEGER,
