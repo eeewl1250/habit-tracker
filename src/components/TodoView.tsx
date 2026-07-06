@@ -97,6 +97,7 @@ function TimelineItem({ log, catDefs, onEditSummary, onEditCategory, onEditTimes
   const end = log.end_time ? new Date(log.end_time) : null
   const duration = end ? differenceInMinutes(end, start) : 0
   const [editing, setEditing] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [editSummary, setEditSummary] = useState(log.summary ?? '')
   const [editCategory, setEditCategory] = useState(log.category)
   const [editStart, setEditStart] = useState(format(start, 'HH:mm'))
@@ -139,9 +140,23 @@ function TimelineItem({ log, catDefs, onEditSummary, onEditCategory, onEditTimes
             </span>
           )}
           <span className="text-[10px] text-gray-400">{formatDuration(duration)}</span>
-          <button onClick={() => setEditing(!editing)} className="ml-auto text-gray-300 hover:text-gray-500 text-xs">
-            {editing ? '✕' : '📝'}
-          </button>
+          <div className="ml-auto flex items-center gap-1">
+            <button onClick={() => setEditing(!editing)} className="px-1.5 py-0.5 text-gray-300 hover:text-gray-500 text-xs transition-colors rounded hover:bg-gray-100">
+              {editing ? <CatIcon name="close" /> : <CatIcon name="edit" />}
+            </button>
+            <div className="relative">
+              <button onClick={() => setConfirmDelete(true)} className="px-1.5 py-0.5 text-gray-300 hover:text-red-500 text-xs transition-colors rounded hover:bg-red-50" title="削除">
+                <CatIcon name="delete" />
+              </button>
+              {confirmDelete && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex items-center gap-1.5 z-20 whitespace-nowrap">
+                  <span className="text-[10px] text-gray-600">削除しますか？</span>
+                  <button onClick={() => { onDelete(log.id); setConfirmDelete(false) }} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] font-medium hover:bg-red-600">OK</button>
+                  <button onClick={() => setConfirmDelete(false)} className="px-2 py-0.5 border border-gray-300 rounded text-[10px] text-gray-600 hover:bg-gray-50">キャンセル</button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {editing ? (
@@ -410,6 +425,7 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const timerIntervalRef = useRef<number | null>(null)
   const lastTimeLogIdRef = useRef<string | null>(null)
   const [showTaskSelector, setShowTaskSelector] = useState(false)
+  const [deletingTodoId, setDeletingTodoId] = useState<string | null>(null)
 
   // Summary modal state
   const [summaryModal, setSummaryModal] = useState<{
@@ -521,8 +537,6 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   }, [])
 
   const deleteTodo = useCallback(async (id: string) => {
-    const todo = todos.find(t => t.id === id)
-    if (!await confirm(`「${todo?.title ?? ''}」を削除しますか？`)) return
     try {
       await apiDeleteTodo(id)
       setTodos(prev => prev.filter(t => t.id !== id))
@@ -1107,7 +1121,16 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
                       <span className="text-[10px] text-gray-400 hidden sm:block"><CatIcon name={cat.emoji} />{cat.name}</span>
                       <button onClick={() => openEdit(todo)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100" title="編集">✏️</button>
                       <button onClick={() => moveToToday(todo.id)} className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors opacity-0 group-hover:opacity-100" title="今日のリストに移動">⚡</button>
-                      <button onClick={() => deleteTodo(todo.id)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="削除">✕</button>
+                      <div className="relative inline-flex">
+                        <button onClick={() => setDeletingTodoId(todo.id)} className="px-1.5 py-0.5 text-xs text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="削除">✕</button>
+                        {deletingTodoId === todo.id && (
+                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex items-center gap-1.5 z-20 whitespace-nowrap">
+                            <span className="text-[10px] text-gray-600">削除しますか？</span>
+                            <button onClick={() => { deleteTodo(todo.id); setDeletingTodoId(null) }} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] font-medium hover:bg-red-600">OK</button>
+                            <button onClick={() => setDeletingTodoId(null)} className="px-2 py-0.5 border border-gray-300 rounded text-[10px] text-gray-600 hover:bg-gray-50">キャンセル</button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
