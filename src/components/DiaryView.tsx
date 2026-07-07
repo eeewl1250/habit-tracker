@@ -10,8 +10,8 @@ import remarkBreaks from 'remark-breaks'
 import { diffChars } from 'diff'
 import { correctDiary } from '../lib/gemini'
 import { getSavedThemeId, getTheme, buildMarkdownComponents } from '../lib/markdownThemes'
-import type { DiaryEntry, Todo } from '../types'
-import { fetchCompletedTodosForDate } from '../lib/api'
+import type { DiaryEntry } from '../types'
+
 import { useConfirm } from '../hooks/useConfirm'
 
 export type DiarySubMode = 'calendar' | 'editor'
@@ -61,56 +61,6 @@ function DiffView({ original, corrected }: { original: string; corrected: string
   )
 }
 
-const STRUCTURED_LABELS: Record<string, string> = {
-  footprint: '今日足迹（今日やったこと）',
-  oshi: '推活/推しの発見',
-  happiness: '今日の確幸（嬉しかったこと）',
-  learning: '今日の新知と収穫',
-}
-
-function serializeDiary(structured: Record<string, string>, freeText: string): string {
-  const parts: string[] = []
-  for (const key of ['footprint', 'oshi', 'happiness', 'learning']) {
-    const v = structured[key]?.trim()
-    if (v) parts.push(`## 📌 ${STRUCTURED_LABELS[key]}\n${v}`)
-  }
-  if (parts.length > 0 && freeText.trim()) parts.push('---')
-  if (freeText.trim()) parts.push(freeText)
-  return parts.join('\n\n')
-}
-
-function parseDiary(text: string): { structured: Record<string, string>; freeText: string } {
-  const structured: Record<string, string> = { footprint: '', oshi: '', happiness: '', learning: '' }
-  if (!text.trim()) return { structured, freeText: '' }
-
-  const headerMap: Record<string, string> = {
-    '## 📌 今日足迹（今日やったこと）': 'footprint',
-    '## 📌 推活/推しの発見': 'oshi',
-    '## 📌 今日の確幸（嬉しかったこと）': 'happiness',
-    '## 📌 今日の新知と収穫': 'learning',
-  }
-
-  const lines = text.split('\n')
-  let currentKey = ''
-  const collected: Record<string, string[]> = { footprint: [], oshi: [], happiness: [], learning: [] }
-  let freeMode = false
-  const freeLines: string[] = []
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (trimmed === '---' && !freeMode) { freeMode = true; continue }
-    if (freeMode) { freeLines.push(line); continue }
-    if (headerMap[trimmed]) { currentKey = headerMap[trimmed]; continue }
-    if (currentKey && collected[currentKey]) collected[currentKey].push(line)
-  }
-
-  for (const key of Object.keys(collected)) {
-    structured[key] = collected[key].join('\n').trim()
-  }
-
-  return { structured, freeText: freeLines.join('\n').trim() }
-}
-
 function DiaryEditor({
   dateStr,
   entry,
@@ -124,8 +74,6 @@ function DiaryEditor({
   onUpdate: (date: string, updates: { original_text?: string; corrected_text?: string | null; ai_advice?: string | null }) => Promise<DiaryEntry | null>
   onBack: () => void
 }) {
-  const [step, setStep] = useState<1 | 2>(1)
-  const [structured, setStructured] = useState<Record<string, string>>({ footprint: '', oshi: '', happiness: '', learning: '' })
   const [freeText, setFreeText] = useState<string>('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const freeTextRef = useRef(freeText)
@@ -140,17 +88,11 @@ function DiaryEditor({
   const entryRef = useRef(entry ?? null)
   const [lastSavedLabel, setLastSavedLabel] = useState<string | null>(null)
 
-  const text = useMemo(() => serializeDiary(structured, freeText), [structured, freeText])
+  const text = freeText
   const textRef = useRef(text)
   textRef.current = text
   const lastSavedTextRef = useRef(text)
   const isDirty = text !== lastSavedTextRef.current
-
-  const [completedTodos, setCompletedTodos] = useState<Todo[]>([])
-
-  useEffect(() => {
-    fetchCompletedTodosForDate(dateStr).then(setCompletedTodos).catch(() => {})
-  }, [dateStr])
 
   const [images, setImages] = useState<string[]>([])
   const imgInputRef = useRef<HTMLInputElement>(null)
@@ -174,15 +116,11 @@ function DiaryEditor({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showThemePicker])
 
-  // Parse existing text on mount
   useEffect(() => {
     const original = entry?.original_text ?? ''
     if (original.trim()) {
-      const parsed = parseDiary(original)
-      setStructured(parsed.structured)
-      setFreeText(parsed.freeText)
+      setFreeText(original)
       lastSavedTextRef.current = original
-      setStep(1)
     }
   }, [entry])
 
@@ -203,7 +141,7 @@ function DiaryEditor({
   // Auto-save every 60s
   useEffect(() => {
     const timer = setInterval(async () => {
-      const currentText = serializeDiary(structured, freeTextRef.current)
+      const currentText = freeTextRef.current
       if (!currentText.trim()) return
       if (currentText === lastSavedTextRef.current) return
       try {
@@ -211,31 +149,29 @@ function DiaryEditor({
       } catch { /* silent */ }
     }, 60_000)
     return () => clearInterval(timer)
-  }, [doSave, structured])
+  }, [doSave])
 
   if (entry) entryRef.current = entry
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)
-    const content = serializeDiary(structured, freeText)
     try {
-      await doSave(content)
+      await doSave(freeText)
     } finally {
       setIsSaving(false)
     }
-  }, [structured, freeText, doSave])
+  }, [freeText, doSave])
 
   const handleAICorrection = useCallback(async () => {
-    const content = serializeDiary(structured, freeText)
-    if (!content.trim()) return
+    if (!freeText.trim()) return
     setIsCorrectionLoading(true)
     setCorrectionError(null)
     try {
-      const result = await correctDiary(content)
+      const result = await correctDiary(freeText)
       setCorrectedText(result.corrected_text)
       setAiAdvice(result.advice)
       setShowCorrection(true)
-      await doSave(content)
+      await doSave(freeText)
       if (result.corrected_text) {
         await onUpdate(dateStr, { corrected_text: result.corrected_text, ai_advice: result.advice })
       }
@@ -244,7 +180,7 @@ function DiaryEditor({
     } finally {
       setIsCorrectionLoading(false)
     }
-  }, [structured, freeText, doSave, dateStr, onUpdate])
+  }, [freeText, doSave, dateStr, onUpdate])
 
   const handleGoToEdit = useCallback(() => {
     setActiveTab('edit')
@@ -267,20 +203,34 @@ function DiaryEditor({
     setTimeout(() => { el.setSelectionRange(cursorPos, cursorPos); el.focus() })
   }, [freeText])
 
-  const [showHeadingPicker, setShowHeadingPicker] = useState(false)
+  const [headingPickerPos, setHeadingPickerPos] = useState<{ top: number; left: number } | null>(null)
   const headingRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!showHeadingPicker) return
+    if (!headingPickerPos) return
     const handleClick = (e: MouseEvent) => {
       if (headingRef.current && !headingRef.current.contains(e.target as Node)) {
-        setShowHeadingPicker(false)
+        setHeadingPickerPos(null)
       }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [showHeadingPicker])
+  }, [headingPickerPos])
+
+  const [templatePickerPos, setTemplatePickerPos] = useState<{ top: number; left: number } | null>(null)
+  const templateRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!templatePickerPos) return
+    const handleClick = (e: MouseEvent) => {
+      if (templateRef.current && !templateRef.current.contains(e.target as Node)) {
+        setTemplatePickerPos(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [templatePickerPos])
 
   const headingLevels = [
     { label: 'H1', before: '# ', placeholder: '見出し1' },
@@ -288,6 +238,73 @@ function DiaryEditor({
     { label: 'H3', before: '### ', placeholder: '見出し3' },
     { label: 'H4', before: '#### ', placeholder: '見出し4' },
   ]
+
+  const TEMPLATES_STORAGE_KEY = 'habit-tracker-diary-templates'
+
+  interface Template { id: string; label: string; content: string }
+
+  function generateId(): string { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }
+
+  const defaultTemplates: Template[] = [
+    { id: 'fixed', label: '📌 固定項目', content: '## 📌 今日足迹（今日やったこと）\n\n\n## 📌 推活/推しの発見\n\n\n## 📌 今日の確幸（嬉しかったこと）\n\n\n## 📌 今日の新知と収穫\n\n\n---' },
+    { id: 'diary', label: '📝 日記', content: '## 今日の出来事\n\n## 感想\n\n## 気づき' },
+  ]
+
+  function loadTemplates(): Template[] {
+    try {
+      const raw = localStorage.getItem(TEMPLATES_STORAGE_KEY)
+      if (raw) return JSON.parse(raw)
+    } catch { /* noop */ }
+    return defaultTemplates
+  }
+
+  function saveTemplates(ts: Template[]) {
+    try { localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(ts)) } catch { /* noop */ }
+  }
+
+  const [templates, setTemplates] = useState<Template[]>(loadTemplates)
+  const [showTemplateManager, setShowTemplateManager] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
+  const [editLabel, setEditLabel] = useState('')
+  const [editContent, setEditContent] = useState('')
+
+  const handleSaveTemplate = useCallback(() => {
+    const label = editLabel.trim()
+    const content = editContent.trim()
+    if (!label || !content) return
+    const ts = [...templates]
+    if (editingTemplate) {
+      const idx = ts.findIndex(t => t.id === editingTemplate.id)
+      if (idx >= 0) ts[idx] = { ...editingTemplate, label, content }
+    } else {
+      ts.push({ id: generateId(), label, content })
+    }
+    setTemplates(ts)
+    saveTemplates(ts)
+    setEditingTemplate(null)
+    setEditLabel('')
+    setEditContent('')
+  }, [templates, editingTemplate, editLabel, editContent])
+
+  const handleDeleteTemplate = useCallback((id: string) => {
+    const ts = templates.filter(t => t.id !== id)
+    setTemplates(ts)
+    saveTemplates(ts)
+    if (editingTemplate?.id === id) {
+      setEditingTemplate(null)
+      setEditLabel('')
+      setEditContent('')
+    }
+  }, [templates, editingTemplate])
+
+  const openTemplateManager = useCallback(() => {
+    setEditingTemplate(null)
+    setEditLabel('')
+    setEditContent('')
+    setShowTemplateManager(true)
+  }, [])
+
+
 
   const toolbarButtons = [
     { label: 'B', title: '太字', before: '**', after: '**', placeholder: 'テキスト' },
@@ -334,10 +351,6 @@ function DiaryEditor({
     setImages(prev => prev.filter((_, i) => i !== index))
   }, [images])
 
-  const updateStructured = (key: string, value: string) => {
-    setStructured(prev => ({ ...prev, [key]: value }))
-  }
-
   return (
     <div className="flex flex-col h-dvh">
       {/* Top bar */}
@@ -383,7 +396,7 @@ function DiaryEditor({
           {activeTab === 'edit' ? (
             <>
               {lastSavedLabel && (
-                <span className="text-[10px] text-gray-400">{lastSavedLabel}</span>
+                <span className="text-[10px] text-gray-400">前回保存した：{lastSavedLabel}</span>
               )}
               <button
                 onClick={handleSave}
@@ -405,203 +418,158 @@ function DiaryEditor({
         </div>
       </div>
 
-      {/* Step navigator (edit mode only) */}
-      {activeTab === 'edit' && (
-        <div className="flex items-center justify-center gap-2 px-4 py-1.5 border-b border-gray-100 bg-gray-50 shrink-0">
-          <button
-            onClick={() => setStep(1)}
-            className={`text-xs px-3 py-1 rounded-full transition-colors ${
-              step === 1
-                ? 'bg-blue-600 text-white font-bold'
-                : 'text-gray-500 hover:bg-gray-200'
-            }`}
-          >
-            1. 固定項目
-          </button>
-          <span className="text-xs text-gray-300">→</span>
-          <button
-            onClick={() => setStep(2)}
-            className={`text-xs px-3 py-1 rounded-full transition-colors ${
-              step === 2
-                ? 'bg-blue-600 text-white font-bold'
-                : 'text-gray-500 hover:bg-gray-200'
-            }`}
-          >
-            2. 自由記述
-          </button>
-        </div>
-      )}
-
       {/* Main content */}
       <div className="flex-1 min-h-0 overflow-hidden flex justify-center">
         {activeTab === 'edit' ? (
-          step === 1 ? (
-            /* ── Step 1: Structured input ── */
-            <div className="h-full w-full max-w-3xl overflow-y-auto p-6 space-y-5">
-              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
-                💡 各項目は1〜2文で簡潔に。箇条書きでもOK。
-              </div>
-              {['footprint', 'oshi', 'happiness', 'learning'].map((key) => (
-                <div key={key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    📌 {STRUCTURED_LABELS[key]}
-                  </label>
-                  <textarea
-                    value={structured[key]}
-                    onChange={(e) => updateStructured(key, e.target.value)}
-                    placeholder="50字以内で簡潔に"
-                    rows={2}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
-                  />
-                  {key === 'footprint' && completedTodos.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {completedTodos.map(todo => (
-                        <button
-                          key={todo.id}
-                          onClick={() => {
-                            const existing = structured.footprint.trim()
-                            const clue = todo.title
-                            const newVal = existing ? `${existing}、${clue}` : clue
-                            updateStructured('footprint', newVal)
-                          }}
-                          className="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
-                        >
-                          ✅ {todo.title}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+          /* ── Editor: Image bar + Two-column editor ── */
+          <div className="w-full max-w-5xl flex flex-col my-2 border-gray-200 bg-white border rounded-xl mb-4">
+            {/* Image bar */}
+            <div
+              ref={dropRef}
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 overflow-x-auto min-h-[56px] rounded-t-xl"
+            >
+              {images.length === 0 && (
+                <span className="text-xs text-gray-400 whitespace-nowrap">🖼️ 画像をドロップ or ペースト</span>
+              )}
+              {images.map((img, i) => (
+                <div key={i} className="relative group shrink-0">
+                  <img src={img} alt="" className="w-10 h-10 object-cover rounded border border-gray-200" />
+                  <button
+                    onClick={() => removeImage(i)}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
-              <div className="flex justify-end pt-2">
-                <button
-                  onClick={() => setStep(2)}
-                  className="px-6 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  ➡️ 次へ：自由記述
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* ── Step 2: Image bar + Two-column editor ── */
-            <div className="h-full w-full max-w-5xl flex flex-col my-2">
-              {/* Image bar */}
-              <div
-                ref={dropRef}
-                onDrop={handleDrop}
-                onDragOver={(e) => e.preventDefault()}
-                className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 overflow-x-auto min-h-[56px]"
+              <button
+                onClick={() => imgInputRef.current?.click()}
+                className="shrink-0 px-2 py-1 text-xs text-gray-500 border border-dashed border-gray-300 rounded hover:bg-gray-100"
               >
-                {images.length === 0 && (
-                  <span className="text-xs text-gray-400 whitespace-nowrap">🖼️ 画像をドロップ or ペースト</span>
+                📤 追加
+              </button>
+              <input
+                ref={imgInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || [])
+                  files.forEach(handleImgUpload)
+                  e.target.value = ''
+                }}
+              />
+            </div>
+
+            {/* Toolbar */}
+            <div ref={toolbarRef} className="flex items-center gap-0.5 px-2 py-1 border-b border-gray-200 bg-gray-50 overflow-x-auto">
+              {toolbarButtons.map((btn) => (
+                <button
+                  key={btn.label + btn.title}
+                  onMouseDown={(e) => { e.preventDefault(); handleToolbarInsert(btn.before, btn.after, btn.placeholder) }}
+                  title={btn.title}
+                  className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
+                >
+                  {btn.label}
+                </button>
+              ))}
+              <span className="w-px h-4 bg-gray-300 mx-0.5" />
+              <div className="relative" ref={headingRef}>
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setHeadingPickerPos(p => p ? null : { top: r.bottom + 4, left: r.left }) }}
+                  title="見出し"
+                  className="px-2 py-1 text-xs font-mono text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
+                >
+                  H ▾
+                </button>
+                {headingPickerPos && (
+                  <div
+                    className="fixed z-50 bg-white border border-gray-200 rounded shadow-lg min-w-[5rem]"
+                    style={{ top: headingPickerPos.top, left: headingPickerPos.left }}
+                  >
+                    {headingLevels.map(h => (
+                      <button
+                        key={h.label}
+                        onMouseDown={(e) => { e.preventDefault(); handleToolbarInsert(h.before, '', h.placeholder); setHeadingPickerPos(null) }}
+                        className="block w-full px-3 py-1.5 text-xs text-left text-gray-600 hover:bg-gray-100"
+                      >
+                        {h.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
-                {images.map((img, i) => (
-                  <div key={i} className="relative group shrink-0">
-                    <img src={img} alt="" className="w-10 h-10 object-cover rounded border border-gray-200" />
+              </div>
+              <span className="w-px h-4 bg-gray-300 mx-0.5" />
+              {/* Template button */}
+              <div className="relative" ref={templateRef}>
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setTemplatePickerPos(p => p ? null : { top: r.bottom + 4, left: r.left }) }}
+                  title="テンプレート"
+                  className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
+                >
+                  📋 ▾
+                </button>
+                {templatePickerPos && (
+                  <div
+                    className="fixed z-50 bg-white border border-gray-200 rounded shadow-lg min-w-[12rem]"
+                    style={{ top: templatePickerPos.top, left: templatePickerPos.left }}
+                  >
+                    {templates.map(t => (
+                      <button
+                        key={t.id}
+                        onMouseDown={(e) => { e.preventDefault(); handleToolbarInsert(t.content, '', ''); setTemplatePickerPos(null) }}
+                        className="block w-full px-3 py-1.5 text-xs text-left text-gray-600 hover:bg-gray-100 truncate"
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                    <div className="border-t border-gray-100 my-1" />
                     <button
-                      onClick={() => removeImage(i)}
-                      className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      onMouseDown={(e) => { e.preventDefault(); setTemplatePickerPos(null); openTemplateManager() }}
+                      className="block w-full px-3 py-1.5 text-xs text-left text-blue-600 hover:bg-blue-50 font-medium"
                     >
-                      ×
+                      ✏️ テンプレート管理
                     </button>
                   </div>
-                ))}
-                <button
-                  onClick={() => imgInputRef.current?.click()}
-                  className="shrink-0 px-2 py-1 text-xs text-gray-500 border border-dashed border-gray-300 rounded hover:bg-gray-100"
-                >
-                  📤 追加
-                </button>
-                <input
-                  ref={imgInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || [])
-                    files.forEach(handleImgUpload)
-                    e.target.value = ''
-                  }}
-                />
-              </div>
-
-              {/* Toolbar */}
-              <div ref={toolbarRef} className="sticky top-0 z-10 flex items-center gap-0.5 px-2 py-1 border-b border-gray-200 bg-gray-50 overflow-x-auto">
-                {toolbarButtons.map((btn) => (
-                  <button
-                    key={btn.label + btn.title}
-                    onMouseDown={(e) => { e.preventDefault(); handleToolbarInsert(btn.before, btn.after, btn.placeholder) }}
-                    title={btn.title}
-                    className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
-                  >
-                    {btn.label}
-                  </button>
-                ))}
-                <span className="w-px h-4 bg-gray-300 mx-0.5" />
-                <div className="relative" ref={headingRef}>
-                  <button
-                    onMouseDown={(e) => { e.preventDefault(); setShowHeadingPicker(p => !p) }}
-                    title="見出し"
-                    className="px-2 py-1 text-xs font-mono text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
-                  >
-                    H ▾
-                  </button>
-                  {showHeadingPicker && (
-                    <div className="absolute top-full left-0 mt-0.5 bg-white border border-gray-200 rounded shadow-lg z-20 min-w-[5rem]">
-                      {headingLevels.map(h => (
-                        <button
-                          key={h.label}
-                          onMouseDown={(e) => { e.preventDefault(); handleToolbarInsert(h.before, '', h.placeholder); setShowHeadingPicker(false) }}
-                          className="block w-full px-3 py-1.5 text-xs text-left text-gray-600 hover:bg-gray-100"
-                        >
-                          {h.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Two-column editor */}
-              <div className="flex-1 flex flex-col md:flex-row min-h-0">
-                <textarea
-                  ref={textareaRef}
-                  value={freeText}
-                  onChange={(e) => setFreeText(e.target.value)}
-                  onPaste={handlePaste}
-                  placeholder="自由に書こう..."
-                  className="w-full md:w-1/2 min-h-[300px] md:min-h-0 p-4 text-sm font-mono leading-relaxed resize-none border-r border-gray-200 focus:outline-none"
-                />
-                <div className="hidden md:block w-1/2 overflow-y-auto p-4 bg-white markdown-preview">
-                  {freeText.trim() ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
-                      {freeText}
-                    </ReactMarkdown>
-                  ) : (
-                    <div className="text-sm text-gray-400">プレビュー</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Bottom bar */}
-              <div className="flex items-center justify-between px-4 py-2 border-t border-gray-200 bg-white shrink-0">
-                <button
-                  onClick={() => setStep(1)}
-                  className="text-xs text-gray-500 hover:text-gray-700"
-                >
-                  ⬅️ 戻る
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="px-4 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {isSaving ? '💾 保存中...' : '💾 保存する'}
-                </button>
+                )}
               </div>
             </div>
-          )
+
+            {/* Two-column editor */}
+            <div className="flex-1 flex flex-col md:flex-row min-h-0 mb-2">
+              <textarea
+                ref={textareaRef}
+                value={freeText}
+                onChange={(e) => setFreeText(e.target.value)}
+                onPaste={handlePaste}
+                placeholder="自由に書こう..."
+                className="w-full md:w-1/2 min-h-[300px] md:min-h-0 p-4 text-sm font-mono leading-relaxed resize-none border-r border-gray-200 focus:outline-none"
+              />
+              <div className="hidden md:block w-1/2 overflow-y-auto p-4 bg-white markdown-preview">
+                {freeText.trim() ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
+                    {freeText}
+                  </ReactMarkdown>
+                ) : (
+                  <div className="text-sm text-gray-400">プレビュー</div>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom bar */}
+            {/* <div className="flex items-center justify-end px-4 py-2 border-t border-gray-200 bg-white shrink-0">
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-4 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {isSaving ? '💾 保存中...' : '💾 保存する'}
+              </button>
+            </div> */}
+          </div>
         ) : (
           <div className="h-full overflow-y-auto p-4 space-y-6 max-w-5xl w-full my-2">
             {/* No text state */}
@@ -693,6 +661,69 @@ function DiaryEditor({
         )}
       </div>
       {ConfirmModal}
+      {showTemplateManager && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowTemplateManager(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 shrink-0">
+              <h3 className="text-sm font-bold text-gray-800">✏️ テンプレート管理</h3>
+              <button onClick={() => setShowTemplateManager(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {templates.map(t => (
+                <div key={t.id} className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-800 truncate">{t.label}</div>
+                    <div className="text-[10px] text-gray-400 truncate mt-0.5">{t.content.replace(/\n/g, ' ').slice(0, 60)}</div>
+                  </div>
+                  <button
+                    onClick={() => { setEditingTemplate(t); setEditLabel(t.label); setEditContent(t.content); }}
+                    className="px-2 py-1 text-xs text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded shrink-0"
+                  >
+                    編集
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTemplate(t.id)}
+                    className="px-2 py-1 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded shrink-0"
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+              <div className="border-t border-gray-100 pt-3 space-y-2">
+                <h4 className="text-xs font-bold text-gray-600">{editingTemplate ? 'テンプレートを編集' : '新規テンプレート'}</h4>
+                <input
+                  value={editLabel}
+                  onChange={e => setEditLabel(e.target.value)}
+                  placeholder="テンプレート名"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <textarea
+                  value={editContent}
+                  onChange={e => setEditContent(e.target.value)}
+                  placeholder="テンプレート内容（Markdown）"
+                  rows={4}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setEditingTemplate(null); setEditLabel(''); setEditContent('') }}
+                    className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={handleSaveTemplate}
+                    disabled={!editLabel.trim() || !editContent.trim()}
+                    className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {editingTemplate ? '更新' : '追加'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
