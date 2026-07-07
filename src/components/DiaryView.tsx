@@ -10,6 +10,7 @@ import remarkBreaks from 'remark-breaks'
 import { diffChars } from 'diff'
 import { correctDiary } from '../lib/gemini'
 import { getSavedThemeId, getTheme, buildMarkdownComponents } from '../lib/markdownThemes'
+import { uploadDiaryImage, deleteDiaryImage } from '../lib/api'
 import type { DiaryEntry } from '../types'
 
 import { useConfirm } from '../hooks/useConfirm'
@@ -121,6 +122,8 @@ function DiaryEditor({
     if (original.trim()) {
       setFreeText(original)
       lastSavedTextRef.current = original
+      const matched = Array.from(original.matchAll(/!\[.*?\]\((.*?)\)/g), m => m[1]).filter(u => !u.startsWith('blob:'))
+      if (matched.length > 0) setImages(matched)
     }
   }, [entry])
 
@@ -323,11 +326,11 @@ function DiaryEditor({
   ]
 
   const handleImgUpload = useCallback(async (file: File) => {
-    const url = URL.createObjectURL(file)
+    const url = await uploadDiaryImage(file, dateStr)
     setImages(prev => [...prev, url])
     const mdTag = `![image](${url})`
     setFreeText(prev => prev + '\n' + mdTag)
-  }, [])
+  }, [dateStr])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -346,9 +349,11 @@ function DiaryEditor({
   }, [handleImgUpload])
 
   const removeImage = useCallback((index: number) => {
-    const imgMd = `![image](${images[index]})`
+    const url = images[index]
+    const imgMd = `![image](${url})`
     setFreeText(prev => prev.replace(imgMd, '').replace(/\n{2,}/g, '\n').trim())
     setImages(prev => prev.filter((_, i) => i !== index))
+    if (!url.startsWith('blob:')) deleteDiaryImage(url).catch(() => {})
   }, [images])
 
   return (

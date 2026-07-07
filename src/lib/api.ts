@@ -1025,3 +1025,26 @@ export async function fetchMonthlyTodoStats(yearMonth: string): Promise<{
   const focusMinutes = todos.reduce((sum, t) => sum + (t.actual_minutes ?? 0), 0)
   return { total, completed, focusMinutes }
 }
+
+// ── Diary Images (Supabase Storage) ──
+
+const DIARY_IMAGE_BUCKET = 'diary-images'
+
+export async function uploadDiaryImage(file: File, dateStr: string): Promise<string> {
+  const ext = file.name.split('.').pop() || 'png'
+  const path = `${dateStr}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const { error } = await supabase.storage.from(DIARY_IMAGE_BUCKET).upload(path, file, {
+    contentType: file.type,
+  })
+  if (error) throw error
+  const { data } = supabase.storage.from(DIARY_IMAGE_BUCKET).getPublicUrl(path)
+  return data.publicUrl
+}
+
+export async function deleteDiaryImage(publicUrl: string): Promise<void> {
+  const prefix = `${DIARY_IMAGE_BUCKET}/`
+  const idx = publicUrl.indexOf(prefix)
+  if (idx === -1) return
+  const path = publicUrl.slice(idx + prefix.length)
+  await supabase.storage.from(DIARY_IMAGE_BUCKET).remove([path])
+}
