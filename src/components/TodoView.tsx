@@ -410,16 +410,6 @@ function getBreadcrumb(todo: Todo, todos: Todo[]): Todo[] {
   return crumbs
 }
 
-/** Format a breadcrumb array into a display string. */
-function formatBreadcrumb(crumbs: Todo[], full: boolean): string {
-  if (crumbs.length <= 1) return crumbs[0]?.title ?? ''
-  if (full) {
-    return crumbs.map(c => c.title).join(' › ')
-  }
-  // Default: show only the topmost ancestor + the task name
-  return `${crumbs[0].title} › ${crumbs[crumbs.length - 1].title}`
-}
-
 interface BreadcrumbLabelProps {
   todo: Todo
   todos: Todo[]
@@ -1005,20 +995,6 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
     }
   }, [])
 
-  const clearCompleted = useCallback(async () => {
-    const doneTodos = todos.filter(t => t.status === 'done')
-    if (doneTodos.length === 0) return
-    if (!await confirm(`完了済みタスク ${doneTodos.length} 件をすべて削除しますか？`)) return
-    for (const t of doneTodos) {
-      try {
-        await apiDeleteTodo(t.id)
-      } catch (e) {
-        console.error('Failed to delete todo', e)
-      }
-    }
-    setTodos(prev => prev.filter(t => t.status !== 'done'))
-  }, [todos])
-
   const openEdit = useCallback((todo: Todo) => {
     setEditForm({
       title: todo.title,
@@ -1096,14 +1072,6 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
   const standaloneBacklog = useMemo(
     () => backlogTodos.filter(t => !isProjectTodo(t) && !t.parent_id),
     [backlogTodos, isProjectTodo]
-  )
-
-  const findParent = useCallback(
-    (parentId: string, childId?: string) => {
-      if (childId && parentId === childId) return undefined
-      return todos.find(t => t.id === parentId)
-    },
-    [todos]
   )
 
   const filteredBacklog = filterCat === 'all'
@@ -1978,7 +1946,6 @@ export function TodoView({ tasks, logs, timeLogs }: TodoViewProps) {
       {/* ── Manual Time Input Modal ── */}
       {manualTimeInput && (() => {
         const { todo } = manualTimeInput
-        const cat = catInfo(todo.category, catDefs)
         return (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-30 p-4" onClick={handleCancelManualModal}>
             <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>

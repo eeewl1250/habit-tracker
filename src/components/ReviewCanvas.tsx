@@ -30,7 +30,7 @@ export function ReviewCanvas() {
   const [aiGenerating, setAiGenerating] = useState(false)
   const [aiReport, setAiReport] = useState<string | null>(null)
   const [timelineFilter, setTimelineFilter] = useState('all')
-  const [insertLoading, setInsertLoading] = useState<'bundled' | 'ai' | null>(null)
+  const [, setInsertLoading] = useState<'bundled' | 'ai' | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const themeId = getSavedThemeId() || 'default'
   const theme = getTheme(themeId)
@@ -436,7 +436,7 @@ export function ReviewCanvas() {
             {/* Preview */}
             <div className="w-1/2 h-full overflow-y-auto p-4 bg-white">
               {reportContent.trim() ? (
-                <div className={`prose prose-sm max-w-none ${theme.contentClass}`}>
+                <div className="prose prose-sm max-w-none">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkBreaks]}
                     components={buildMarkdownComponents(theme)}

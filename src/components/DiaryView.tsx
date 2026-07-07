@@ -338,8 +338,6 @@ function DiaryEditor({
     setStructured(prev => ({ ...prev, [key]: value }))
   }
 
-  const content = activeTab === 'edit' ? text : entry?.original_text || text
-
   return (
     <div className="flex flex-col h-dvh">
       {/* Top bar */}

@@ -1092,16 +1092,6 @@ export function FinanceView({
 
   const timeBonus = calcTimeBonus(timeLogs, catDefs, monthStr)
 
-  const prevMonthFocusMinutes = useMemo(() => {
-    let total = 0
-    for (const tl of timeLogs) {
-      if (tl.duration && tl.start_time.startsWith(prevMonthStr)) {
-        total += tl.duration
-      }
-    }
-    return total
-  }, [timeLogs, prevMonthStr])
-
   const prevMonthTimeBonus = calcTimeBonus(timeLogs, catDefs, prevMonthStr)
 
   useEffect(() => {

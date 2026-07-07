@@ -3,7 +3,7 @@ import {
   fetchCravingLogs, fetchMenstruationLogs, fetchDiaryEntries,
   fetchSchedules, fetchMonthlyTodoStats,
 } from './api'
-import type { Task, DailyLog, SleepLog, TimeLog, CravingLog, MenstruationLog, DiaryEntry, Schedule } from '../types'
+import type { Task, DailyLog, CravingLog } from '../types'
 import { format, startOfMonth, endOfMonth, getDaysInMonth, parseISO, differenceInMinutes, differenceInCalendarDays, eachDayOfInterval } from 'date-fns'
 
 export interface HouseholdStat {
@@ -199,7 +199,6 @@ export async function bundleMonthlyData(yearMonth: string): Promise<MonthlyBundl
     .map(ml => ({ date: `${yearMonth}-${String(ml.day).padStart(2, '0')}`, level: ml.level }))
     .sort((a, b) => a.date.localeCompare(b.date))
 
-  const logDates = new Set(dailyLogs.map(l => l.date))
   const householdTaskCounts = new Map<string, { count: number; taskName: string }>()
   for (const task of activeTasks) {
     const display = detectHouseholdTask(task.name)
@@ -225,16 +224,11 @@ export async function bundleMonthlyData(yearMonth: string): Promise<MonthlyBundl
   const timeline: TimelineEvent[] = []
   const keyEvents: { date: string; title: string; category: string }[] = []
 
-  const scheduleCategories = new Map<string, string>([
-    ['school', '🏫'], ['job', '🔴'], ['life', '🔵'], ['ent', '🟣'], ['study', '🟠'],
-  ])
-
   const monthSchedules = schedules.filter(s => {
     const d = s.date_start
     return d >= dateStart && d <= dateEnd
   })
   for (const s of monthSchedules) {
-    const emoji = scheduleCategories.get(s.category) ?? '📌'
     timeline.push({
       date: s.date_start,
       time: s.time_start ?? undefined,

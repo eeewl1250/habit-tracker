@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { Todo, TodoFormData, TodoCategory, TodoStatus } from '../types'
+import type { Todo, TodoFormData, TodoStatus } from '../types'
 import { fetchTodos, createTodo, updateTodo, deleteTodo } from '../lib/api'
 
 export function useTodos() {
