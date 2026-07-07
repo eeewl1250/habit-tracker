@@ -325,6 +325,8 @@ function DiaryEditor({
     { label: '―', title: '区切り線', before: '\n---\n', after: '' },
   ]
 
+
+
   const handleImgUpload = useCallback(async (file: File) => {
     const url = await uploadDiaryImage(file, dateStr)
     setImages(prev => [...prev, url])
@@ -563,17 +565,6 @@ function DiaryEditor({
                 )}
               </div>
             </div>
-
-            {/* Bottom bar */}
-            {/* <div className="flex items-center justify-end px-4 py-2 border-t border-gray-200 bg-white shrink-0">
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="px-4 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {isSaving ? '💾 保存中...' : '💾 保存する'}
-              </button>
-            </div> */}
           </div>
         ) : (
           <div className="h-full overflow-y-auto p-4 space-y-6 max-w-5xl w-full my-2">
