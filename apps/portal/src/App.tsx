@@ -1,372 +1,47 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
-import { format, subDays, addDays, startOfMonth } from 'date-fns'
-import { Header, MatrixView, MobileView, HeatmapView, StatsView, NotesView, TaskForm, ManagementPage, Toast, NoteModal, HomeView, useTasks, useLogs, useViewDates, useToast, useNoteFlow, fetchCategories, fetchCategoryDefinitions, seedDefaultCategories } from '@habit-tracker/habits'
-import { SleepView, useSleepLogs } from '@habit-tracker/sleep'
-import { FinanceView, useFinance, useBudget, useRecurring } from '@habit-tracker/finance'
-import { DiaryView, useDiary } from '@habit-tracker/diary'
-import type { DiarySubMode } from '@habit-tracker/diary'
-import { CravingView } from '@habit-tracker/craving'
-import { MenstruationView } from '@habit-tracker/menstruation'
-import { ScheduleView } from '@habit-tracker/schedule'
-import { TodoView, useTimeLogs } from '@habit-tracker/todo'
-import { CategoryManagerPage } from '@habit-tracker/category'
-import { ReviewBundler as ReviewCanvas } from '@habit-tracker/review'
-import type { Category, CategoryDefinition, ViewMode } from '@habit-tracker/shared'
-import type { TargetPool } from '@habit-tracker/finance'
+const apps = [
+  { name: 'ホーム', icon: '🏠', port: 3000, desc: 'ダッシュボード', primary: true },
+  { name: '習慣', icon: '☑', port: 3006, desc: '週間・月間の習慣確認' },
+  { name: 'スケジュール', icon: '📅', port: 3007, desc: 'スケジュール管理' },
+  { name: 'TODO', icon: '📋', port: 3008, desc: 'タスク管理・集中トラッキング' },
+  { name: 'カテゴリ', icon: '🏷', port: 3009, desc: 'カテゴリ設定' },
+  { name: '日記', icon: '📝', port: 3003, desc: '日本語日記を書く' },
+  { name: '睡眠', icon: '🛌', port: 3001, desc: '睡眠記録' },
+  { name: '家計簿', icon: '💰', port: 3002, desc: '支出管理・予算' },
+  { name: '欲望', icon: '🔥', port: 3004, desc: '間食欲求記録' },
+  { name: '生理', icon: '🩸', port: 3005, desc: '生理周期記録' },
+  { name: 'レビュー', icon: '📊', port: 3010, desc: '月次レビュー' },
+]
 
 function App() {
-  const tasks = useTasks()
-  const logs = useLogs()
-  const dates = useViewDates()
-  const toast = useToast()
-  const noteFlow = useNoteFlow()
-  const sleepLogs = useSleepLogs()
-  const timeLogs = useTimeLogs()
-  const finance = useFinance()
-  const budget = useBudget()
-  const recurring = useRecurring()
-  const diary = useDiary()
-
-  const [showForm, setShowForm] = useState(false)
-  const [showManagement, setShowManagement] = useState(false)
-  const [categories, setCategories] = useState<Category[]>([])
-  const [catDefs, setCatDefs] = useState<CategoryDefinition[]>([])
-  const [diarySubMode, setDiarySubMode] = useState<DiarySubMode>('calendar')
-  
-  const categoryColor = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const c of categories) map.set(c.name, c.color)
-    return map
-  }, [categories])
-
-  const categoryBgColor = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const c of categories) map.set(c.name, c.bg_color)
-    return map
-  }, [categories])
-
-  const handleViewModeChange = useCallback((mode: ViewMode) => {
-    setShowManagement(false)
-    dates.setViewMode(mode)
-  }, [dates])
-
-  const dateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
-
-  const loadLogs = useCallback(() => {
-    logs.load(
-      format(subDays(dates.dateRange.start, 31), 'yyyy-MM-dd'),
-      format(addDays(dates.dateRange.end, 31), 'yyyy-MM-dd')
-    )
-  }, [dateRangeStr, logs.load])
-
-  const sleepDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
-
-  const loadSleepLogs = useCallback(() => {
-    sleepLogs.load(
-      format(subDays(dates.dateRange.start, 31), 'yyyy-MM-dd'),
-      format(addDays(dates.dateRange.end, 31), 'yyyy-MM-dd')
-    )
-  }, [sleepDateRangeStr, sleepLogs.load])
-
-  useEffect(() => {
-    fetchCategories().then(setCategories).catch(() => {})
-    fetchCategoryDefinitions().then(setCatDefs).catch(() => {})
-  }, [])
-
-  // Seed default category definitions on first load
-  useEffect(() => {
-    seedDefaultCategories().catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    loadLogs()
-  }, [loadLogs])
-
-  useEffect(() => {
-    loadSleepLogs()
-  }, [loadSleepLogs])
-
-  const isHome = dates.viewMode === 'home'
-  const isCraving = dates.viewMode === 'craving'
-  const isSleep = dates.viewMode === 'sleep'
-  const isFocus = dates.viewMode === 'focus' // redirect to todo
-  const isFinance = dates.viewMode === 'finance'
-  const isDiary = dates.viewMode === 'diary'
-  const isSchedule = dates.viewMode === 'schedule'
-  const isReview = dates.viewMode === 'review'
-  const isTodo = dates.viewMode === 'todo'
-  const isCategories = dates.viewMode === 'categories'
-
-  const focusDateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
-  useEffect(() => {
-    timeLogs.load(
-      format(subDays(dates.dateRange.start, 31), 'yyyy-MM-dd'),
-      format(addDays(dates.dateRange.end, 31), 'yyyy-MM-dd')
-    )
-  }, [focusDateRangeStr, timeLogs.load])
-
-  const [dashboardMonth, setDashboardMonth] = useState(startOfMonth(new Date()))
-  const dashboardMonthStr = format(dashboardMonth, 'yyyy-MM')
-
-  const handleDashboardMonthChange = useCallback((month: Date) => {
-    setDashboardMonth(month)
-  }, [])
-
-  const handleRecalculateRollover = useCallback(
-    (month: string, poolTotals: Record<TargetPool, number>, prevTimeBonus?: number) => {
-      budget.recalculateRollover(month, poolTotals, prevTimeBonus)
-    },
-    [budget.recalculateRollover]
-  )
-
-  useEffect(() => {
-    finance.load(
-      format(subDays(new Date(), 180), 'yyyy-MM-dd'),
-      format(addDays(new Date(), 31), 'yyyy-MM-dd')
-    )
-  }, [finance.load])
-
-  useEffect(() => {
-    if (isFinance) budget.load(dashboardMonthStr)
-  }, [isFinance, budget.load, dashboardMonthStr])
-
-  // Load diary entries on mount (wide range)
-  useEffect(() => {
-    diary.load(
-      format(subDays(new Date(), 365), 'yyyy-MM-dd'),
-      format(addDays(new Date(), 365), 'yyyy-MM-dd'),
-    )
-  }, [diary.load])
-
-  // Load recurring templates on mount
-  useEffect(() => {
-    recurring.loadTemplates()
-  }, [recurring.loadTemplates])
-
-  // Ensure monthly recurring records exist for the current month
-  useEffect(() => {
-    if (isFinance && recurring.templates.length > 0) {
-      recurring.ensureMonthlyRecords(dashboardMonthStr)
-    }
-  }, [isFinance, dashboardMonthStr, recurring.templates.length, recurring.ensureMonthlyRecords])
-
-  const showMatrix = (dates.viewMode === 'week' || dates.viewMode === 'month') && !isDiary && !isHome
-
-  const refreshCategories = useCallback(() => {
-    fetchCategories().then(setCategories).catch(() => {})
-  }, [])
-
-  const handleRefresh = useCallback(() => {
-    tasks.reload()
-    refreshCategories()
-  }, [tasks, refreshCategories])
-
-  const handleManage = useCallback(() => {
-    setShowManagement((p) => !p)
-  }, [])
-
-  const handleChecked = useCallback((taskId: string, taskName: string) => {
-    toast.show(`「${taskName}」を記録しました`)
-    noteFlow.setPendingFromCheckIn(taskId, taskName)
-  }, [toast, noteFlow])
-
-  const handleToastClick = useCallback(() => {
-    noteFlow.handleToastClick()
-    toast.close()
-  }, [toast, noteFlow])
-
-  const isDark = (isCraving || isSleep) && !isHome
+  const baseHost = window.location.hostname
 
   return (
-    <div className={`h-screen overflow-hidden flex flex-col transition-colors ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
-      {(!isDiary || diarySubMode === 'calendar') && !isReview && (
-        <Header
-          rangeLabel={dates.rangeLabel}
-          viewMode={dates.viewMode}
-          onPrev={dates.goPrev}
-          onNext={dates.goNext}
-          onToday={dates.goToday}
-          onViewModeChange={handleViewModeChange}
-          managing={showManagement}
-          onManage={handleManage}
-          hideDateNav={isHome || dates.viewMode === 'menstruation' || isCraving || isFocus || isFinance || isDiary || isSchedule || isReview || isTodo || isCategories}
-          dark={isDark}
-        />
-      )}
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+      <div className="max-w-2xl w-full">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2"> Habit Tracker</h1>
+          <p className="text-sm text-gray-500">習慣管理ポータル</p>
+        </div>
 
-      {isHome ? (
-        <HomeView
-          tasks={tasks.tasks}
-          logs={logs.logs}
-          sleepLogs={sleepLogs.logs}
-          timeLogs={timeLogs.logs}
-          diaryEntries={diary.entries}
-          onNavigate={handleViewModeChange}
-        />
-      ) : (
-        <main className="flex-1 overflow-y-auto scrollbar-hide">
-          {showManagement ? (
-            <ManagementPage
-              tasks={tasks.tasks}
-              categories={categories}
-              onAdd={(form) => tasks.add(form)}
-              onEdit={(id, form) => tasks.edit(id, form)}
-              onDelete={(id) => tasks.remove(id)}
-              onRefresh={handleRefresh}
-            />
-          ) : isCraving ? (
-          <CravingView />
-        ) : dates.viewMode === 'menstruation' ? (
-          <MenstruationView />
-        ) : isFocus ? (
-          <TodoView tasks={tasks.tasks} logs={logs.logs} timeLogs={timeLogs} />
-        ) : isFinance ? (
-          <FinanceView
-            records={finance.records}
-            timeLogs={timeLogs.logs}
-            catDefs={catDefs}
-            budget={budget.getSettings(dashboardMonthStr)}
-            dashboardMonth={dashboardMonth}
-            onDashboardMonthChange={handleDashboardMonthChange}
-            recurringTemplates={recurring.templates}
-            recurringRecords={recurring.monthlyRecords}
-            recurringIncome={recurring.totalIncome}
-            recurringExpense={recurring.totalExpense}
-            recurringNet={recurring.netRecurring}
-            onAdd={finance.add}
-            onUpdate={finance.update}
-            onDelete={finance.remove}
-            onUpdateBase={(field, value) => budget.updateBase(dashboardMonthStr, field, value)}
-            onRecalculateRollover={handleRecalculateRollover}
-            onAddRecurringTemplate={recurring.addTemplate}
-            onEditRecurringTemplate={recurring.editTemplate}
-            onDeleteRecurringTemplate={recurring.removeTemplate}
-            onUpdateRecurringRecord={recurring.updateMonthlyRecord}
-          />
-        ) : isSchedule ? (
-          <ScheduleView onNavigateToCategories={() => dates.setViewMode('categories')} />
-        ) : isDiary ? (
-          <DiaryView
-            entries={diary.entries}
-            onSave={diary.save}
-            onUpdate={diary.update}
-            onModeChange={setDiarySubMode}
-          />
-          ) : isTodo ? (
-            <TodoView tasks={tasks.tasks} logs={logs.logs} timeLogs={timeLogs} />
-          ) : isCategories ? (
-            <CategoryManagerPage />
-          ) : isReview ? (
-            <ReviewCanvas />
-          ) : isSleep ? (
-          <SleepView
-            sleepLogs={sleepLogs.logs}
-            days={dates.days}
-            onRecordSleep2Time={sleepLogs.recordSleep2Time}
-            onRecordWake2Time={sleepLogs.recordWake2Time}
-            onUpdateTimes={sleepLogs.updateTimes}
-          />
-        ) : (
-          <>
-            <div className="hidden md:flex justify-end gap-2 p-4">
-              <button
-                onClick={handleManage}
-                className="px-4 py-2 bg-white text-gray-600 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
-              >
-                管理
-              </button>
-              <button
-                onClick={() => setShowForm(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-              >
-                + タスク追加
-              </button>
-            </div>
-
-            {showForm && (
-              <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20 p-4">
-                <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-                  <h2 className="text-lg font-bold mb-4">新しいタスク</h2>
-                  <TaskForm
-                    categories={categories}
-                    onSave={async (form) => {
-                      await tasks.add(form)
-                      refreshCategories()
-                      setShowForm(false)
-                    }}
-                    onCancel={() => setShowForm(false)}
-                  />
-                </div>
-              </div>
-            )}
-
-            {dates.viewMode === 'heatmap' && (
-              <HeatmapView tasks={tasks.tasks} categoryColor={categoryColor} />
-            )}
-            {dates.viewMode === 'stats' && (
-              <StatsView tasks={tasks.tasks} categoryColor={categoryColor} />
-            )}
-            {dates.viewMode === 'notes' &&
-              <NotesView key={noteFlow.refreshKey} categories={categories} categoryColor={categoryColor} />}
-
-            {showMatrix && (
-              <>
-                <div className="block md:hidden">
-                  <MobileView
-                    tasks={tasks.tasks}
-                    logs={logs}
-                    categoryColor={categoryColor}
-                    onReloadLogs={loadLogs}
-                    onManage={handleManage}
-                    onChecked={handleChecked}
-                  />
-                </div>
-                <div className="hidden md:block">
-                  <MatrixView
-                    tasks={tasks.tasks}
-                    days={dates.days}
-                    logs={logs}
-                    categoryColor={categoryColor}
-                    categoryBgColor={categoryBgColor}
-                    onChecked={handleChecked}
-                  />
-                </div>
-              </>
-            )}
-          </>
-        )}
-      </main>
-      )}
-
-      {!showManagement && !isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && !isTodo && !isCategories && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
-        >
-          +
-        </button>
-      )}
-
-      {!isHome && dates.viewMode !== 'menstruation' && !isCraving && !isSleep && !isFocus && !isFinance && !isDiary && !isSchedule && !isReview && !isTodo && !isCategories && (
-        <>
-          <Toast
-            key={toast.key}
-            message={toast.message}
-            visible={toast.isVisible}
-            onClose={toast.close}
-            onClick={handleToastClick}
-          />
-
-          {noteFlow.prompt && (
-            <NoteModal
-              taskId={noteFlow.prompt.taskId}
-              taskName={noteFlow.prompt.taskName}
-              onClose={noteFlow.handleNoteModalClose}
-              onSaved={noteFlow.handleNoteSaved}
-            />
-          )}
-        </>
-      )}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {apps.map((app) => (
+            <a
+              key={app.name}
+              href={`http://${baseHost}:${app.port}`}
+              className={`flex flex-col items-center gap-1 p-5 rounded-xl border transition-all hover:shadow-md active:scale-95 text-center ${
+                app.primary
+                  ? 'bg-blue-50 border-blue-200 hover:border-blue-400'
+                  : 'bg-white border-gray-200 hover:border-blue-300'
+              }`}
+            >
+              <span className="text-3xl">{app.icon}</span>
+              <span className="text-sm font-semibold text-gray-700">{app.name}</span>
+              <span className="text-[10px] text-gray-400 leading-tight">{app.desc}</span>
+              <span className="text-[9px] text-gray-300 mt-1">:{app.port}</span>
+            </a>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

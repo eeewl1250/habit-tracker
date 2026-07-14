@@ -16,31 +16,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
-    "paths": {
-      "@habit-tracker/shared": ["../../packages/shared/src"],
-      "@habit-tracker/shared/*": ["../../packages/shared/src/*"],
-      "@habit-tracker/habits": ["../habits/src"],
-      "@habit-tracker/habits/*": ["../habits/src/*"],
-      "@habit-tracker/sleep": ["../sleep/src"],
-      "@habit-tracker/sleep/*": ["../sleep/src/*"],
-      "@habit-tracker/finance": ["../finance/src"],
-      "@habit-tracker/finance/*": ["../finance/src/*"],
-      "@habit-tracker/diary": ["../diary/src"],
-      "@habit-tracker/diary/*": ["../diary/src/*"],
-      "@habit-tracker/craving": ["../craving/src"],
-      "@habit-tracker/craving/*": ["../craving/src/*"],
-      "@habit-tracker/menstruation": ["../menstruation/src"],
-      "@habit-tracker/menstruation/*": ["../menstruation/src/*"],
-      "@habit-tracker/schedule": ["../schedule/src"],
-      "@habit-tracker/schedule/*": ["../schedule/src/*"],
-      "@habit-tracker/todo": ["../todo/src"],
-      "@habit-tracker/todo/*": ["../todo/src/*"],
-      "@habit-tracker/category": ["../category/src"],
-      "@habit-tracker/category/*": ["../category/src/*"],
-      "@habit-tracker/review": ["../review/src"],
-      "@habit-tracker/review/*": ["../review/src/*"]
-    }
+    "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "../../packages/shared/src"]
+  "include": ["src"]
 }
