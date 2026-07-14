@@ -1,0 +1,197 @@
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { format, subDays, addDays } from 'date-fns'
+import { Header } from './components/Header'
+import { MatrixView } from './components/MatrixView'
+import { MobileView } from './components/MobileView'
+import { HeatmapView } from './components/HeatmapView'
+import { StatsView } from './components/StatsView'
+import { NotesView } from './components/NotesView'
+import { TaskForm } from './components/TaskForm'
+import { ManagementPage } from './components/ManagementPage'
+import { Toast } from './components/Toast'
+import { NoteModal } from './components/NoteModal'
+import { useTasks } from './hooks/useTasks'
+import { useLogs } from './hooks/useLogs'
+import { useViewDates } from './hooks/useViewDates'
+import { useToast } from './hooks/useToast'
+import { useNoteFlow } from './hooks/useNoteFlow'
+import { fetchCategories, fetchCategoryDefinitions, seedDefaultCategories } from './lib/api'
+import type { Category } from './types'
+
+function App() {
+  const tasks = useTasks()
+  const logs = useLogs()
+  const dates = useViewDates()
+  const toast = useToast()
+  const noteFlow = useNoteFlow()
+
+  const [showForm, setShowForm] = useState(false)
+  const [showManagement, setShowManagement] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
+
+  const categoryColor = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of categories) map.set(c.name, c.color)
+    return map
+  }, [categories])
+
+  const categoryBgColor = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of categories) map.set(c.name, c.bg_color)
+    return map
+  }, [categories])
+
+  const dateRangeStr = `${format(dates.dateRange.start, 'yyyy-MM-dd')}-${format(dates.dateRange.end, 'yyyy-MM-dd')}`
+
+  const loadLogs = useCallback(() => {
+    logs.load(
+      format(subDays(dates.dateRange.start, 31), 'yyyy-MM-dd'),
+      format(addDays(dates.dateRange.end, 31), 'yyyy-MM-dd')
+    )
+  }, [dateRangeStr, logs.load])
+
+  useEffect(() => {
+    fetchCategories().then(setCategories).catch(() => {})
+    fetchCategoryDefinitions().catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    seedDefaultCategories().catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadLogs()
+  }, [loadLogs])
+
+  const refreshCategories = useCallback(() => {
+    fetchCategories().then(setCategories).catch(() => {})
+  }, [])
+
+  const handleRefresh = useCallback(() => {
+    tasks.reload()
+    refreshCategories()
+  }, [tasks, refreshCategories])
+
+  const handleManage = useCallback(() => {
+    setShowManagement((p) => !p)
+  }, [])
+
+  const handleChecked = useCallback((taskId: string, taskName: string) => {
+    toast.show(`「${taskName}」を記録しました`)
+    noteFlow.setPendingFromCheckIn(taskId, taskName)
+  }, [toast, noteFlow])
+
+  const handleToastClick = useCallback(() => {
+    noteFlow.handleToastClick()
+    toast.close()
+  }, [toast, noteFlow])
+
+  const showMatrix = dates.viewMode === 'week' || dates.viewMode === 'month'
+
+  return (
+    <div className="h-screen overflow-hidden flex flex-col bg-gray-50">
+      {!showManagement && (
+        <Header
+          rangeLabel={dates.rangeLabel}
+          viewMode={dates.viewMode}
+          onPrev={dates.goPrev}
+          onNext={dates.goNext}
+          onToday={dates.goToday}
+          onViewModeChange={dates.setViewMode}
+          managing={showManagement}
+          onManage={handleManage}
+          hideDateNav={dates.viewMode === 'heatmap' || dates.viewMode === 'stats' || dates.viewMode === 'notes' || showManagement}
+        />
+      )}
+
+      <main className="flex-1 overflow-y-auto scrollbar-hide">
+        {showManagement ? (
+          <ManagementPage
+            tasks={tasks.tasks}
+            categories={categories}
+            onAdd={(form) => tasks.add(form)}
+            onEdit={(id, form) => tasks.edit(id, form)}
+            onDelete={(id) => tasks.remove(id)}
+            onRefresh={handleRefresh}
+          />
+        ) : dates.viewMode === 'heatmap' ? (
+          <HeatmapView tasks={tasks.tasks} categoryColor={categoryColor} />
+        ) : dates.viewMode === 'stats' ? (
+          <StatsView tasks={tasks.tasks} categoryColor={categoryColor} />
+        ) : dates.viewMode === 'notes' ? (
+          <NotesView key={noteFlow.refreshKey} categories={categories} categoryColor={categoryColor} />
+        ) : showMatrix ? (
+          <>
+            <div className="block md:hidden">
+              <MobileView
+                tasks={tasks.tasks}
+                logs={logs}
+                categoryColor={categoryColor}
+                onReloadLogs={loadLogs}
+                onManage={handleManage}
+                onChecked={handleChecked}
+              />
+            </div>
+            <div className="hidden md:block">
+              <MatrixView
+                tasks={tasks.tasks}
+                days={dates.days}
+                logs={logs}
+                categoryColor={categoryColor}
+                categoryBgColor={categoryBgColor}
+                onChecked={handleChecked}
+              />
+            </div>
+          </>
+        ) : null}
+      </main>
+
+      {!showManagement && (
+        <>
+          <button
+            onClick={() => setShowForm(true)}
+            className="fixed bottom-6 right-6 z-20 md:hidden w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 active:scale-95 transition-all"
+          >
+            +
+          </button>
+
+          <Toast
+            key={toast.key}
+            message={toast.message}
+            visible={toast.isVisible}
+            onClose={toast.close}
+            onClick={handleToastClick}
+          />
+
+          {noteFlow.prompt && (
+            <NoteModal
+              taskId={noteFlow.prompt.taskId}
+              taskName={noteFlow.prompt.taskName}
+              onClose={noteFlow.handleNoteModalClose}
+              onSaved={noteFlow.handleNoteSaved}
+            />
+          )}
+        </>
+      )}
+
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-20 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-bold mb-4">新しいタスク</h2>
+            <TaskForm
+              categories={categories}
+              onSave={async (form) => {
+                await tasks.add(form)
+                refreshCategories()
+                setShowForm(false)
+              }}
+              onCancel={() => setShowForm(false)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default App

@@ -1,3 +1,4 @@
+// apps/diary/src/components/DiaryView.tsx
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   format, startOfMonth, addMonths, subMonths,
@@ -26,11 +27,7 @@ interface DiaryViewProps {
 
 type ViewMode = 'calendar' | 'editor'
 
-const WEEKDAYS = ['日', '朁E, '火', '水', '木', '釁E, '圁E]
-
-
-
-
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 
 function DiffView({ original, corrected }: { original: string; corrected: string }) {
   const changes = diffChars(original, corrected)
@@ -47,7 +44,7 @@ function DiffView({ original, corrected }: { original: string; corrected: string
       </div>
       <div className="p-3 bg-white border border-gray-200 rounded-lg text-sm leading-relaxed whitespace-pre-wrap">
         {changes.length === 0 ? (
-          <span className="text-gray-400">差刁E��ありません</span>
+          <span className="text-gray-400">差異はありません</span>
         ) : changes.map((part, i) => {
           if (part.added) {
             return <span key={i} className="bg-green-100 text-green-800 rounded px-0.5">{part.value}</span>
@@ -128,7 +125,7 @@ function DiaryEditor({
   }, [entry])
 
   const dateObj = parseISO(dateStr)
-  const dateLabel = format(dateObj, 'yyyy年 M朁Ed日 (E)', { locale: ja })
+  const dateLabel = format(dateObj, 'yyyy年 M月d日 (E)', { locale: ja })
 
   const doSave = useCallback(async (content: string) => {
     if (entryRef.current) {
@@ -236,10 +233,10 @@ function DiaryEditor({
   }, [templatePickerPos])
 
   const headingLevels = [
-    { label: 'H1', before: '# ', placeholder: '見�EぁE' },
-    { label: 'H2', before: '## ', placeholder: '見�EぁE' },
-    { label: 'H3', before: '### ', placeholder: '見�EぁE' },
-    { label: 'H4', before: '#### ', placeholder: '見�EぁE' },
+    { label: 'H1', before: '# ', placeholder: '見出し' },
+    { label: 'H2', before: '## ', placeholder: '見出し' },
+    { label: 'H3', before: '### ', placeholder: '見出し' },
+    { label: 'H4', before: '#### ', placeholder: '見出し' },
   ]
 
   const TEMPLATES_STORAGE_KEY = 'habit-tracker-diary-templates'
@@ -249,8 +246,8 @@ function DiaryEditor({
   function generateId(): string { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }
 
   const defaultTemplates: Template[] = [
-    { id: 'fixed', label: '📌 固定頁E��', content: '## 📌 今日足迹�E�今日めE��たこと�E�\n\n\n## 📌 推活/推し�E発見\n\n\n## 📌 今日の確幸�E�嬉しかったこと�E�\n\n\n## 📌 今日の新知と収穫\n\n\n---' },
-    { id: 'diary', label: '📝 日訁E, content: '## 今日の出来事\n\n## 感想\n\n## 気づぁE },
+    { id: 'fixed', label: '📌 固定ページ', content: '## 📌 今日の足迹（今日めでたこと）\n\n\n## 📌 推活/推し活発見\n\n\n## 📌 今日の確幸（嬉しかったこと）\n\n\n## 📌 今日の新知と収穫\n\n\n---' },
+    { id: 'diary', label: '📝 日記', content: '## 今日の出来事\n\n## 感想\n\n## 気づき' },
   ]
 
   function loadTemplates(): Template[] {
@@ -307,25 +304,21 @@ function DiaryEditor({
     setShowTemplateManager(true)
   }, [])
 
-
-
   const toolbarButtons = [
-    { label: 'B', title: '太孁E, before: '**', after: '**', placeholder: 'チE��スチE },
-    { label: 'I', title: '斜佁E, before: '*', after: '*', placeholder: 'チE��スチE },
-    { label: 'S', title: '取消緁E, before: '~~', after: '~~', placeholder: 'チE��スチE },
-    { label: '>', title: '引用', before: '> ', after: '', placeholder: '引用斁E },
-    { label: '•', title: 'リスチE, before: '- ', after: '', placeholder: '頁E��' },
-    { label: '1.', title: '番号付きリスチE, before: '1. ', after: '', placeholder: '頁E��' },
-    { label: '☁E, title: 'タスク', before: '- [ ] ', after: '', placeholder: 'タスク' },
-    { label: '<>', title: 'インラインコーチE, before: '`', after: '`', placeholder: 'コーチE },
-    { label: '⎁E, title: 'コードブロチE��', before: '\n\n', after: '\n\n', placeholder: 'コーチE },
-    { label: '🔗', title: 'リンク', before: '[', after: '](url)', placeholder: 'チE��スチE },
-    { label: '🖼', title: '画僁E, before: '![', after: '](url)', placeholder: 'alt' },
-    { label: '📋', title: 'チE�Eブル', before: '\n| 見�EぁE | 見�EぁE | 見�EぁE |\n| --- | --- | --- |\n| セル | セル | セル |\n', after: '' },
-    { label: ' E, title: '区刁E��緁E, before: '\n---\n', after: '' },
+    { label: 'B', title: '太字', before: '**', after: '**', placeholder: 'テキスト' },
+    { label: 'I', title: '斜体', before: '*', after: '*', placeholder: 'テキスト' },
+    { label: 'S', title: '取消線', before: '~~', after: '~~', placeholder: 'テキスト' },
+    { label: '>', title: '引用', before: '> ', after: '', placeholder: '引用文' },
+    { label: '•', title: 'リスト', before: '- ', after: '', placeholder: '項目' },
+    { label: '1.', title: '番号付きリスト', before: '1. ', after: '', placeholder: '項目' },
+    { label: '☐', title: 'タスク', before: '- [ ] ', after: '', placeholder: 'タスク' },
+    { label: '<>', title: 'インラインコード', before: '`', after: '`', placeholder: 'コード' },
+    { label: '```', title: 'コードブロック', before: '\n\n', after: '\n\n', placeholder: 'コード' },
+    { label: '🔗', title: 'リンク', before: '[', after: '](url)', placeholder: 'テキスト' },
+    { label: '🖼', title: '画像', before: '![', after: '](url)', placeholder: 'alt' },
+    { label: '📋', title: 'テーブル', before: '\n| 見出し | 見出し | 見出し |\n| --- | --- | --- |\n| セル | セル | セル |\n', after: '' },
+    { label: '---', title: '区切り線', before: '\n---\n', after: '' },
   ]
-
-
 
   const handleImgUpload = useCallback(async (file: File) => {
     const el = textareaRef.current
@@ -370,10 +363,10 @@ function DiaryEditor({
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white shrink-0">
         <div className="flex items-center gap-2">
           <button onClick={async () => {
-            if (isDirty && !await confirm('保存されてぁE��ぁE��更があります。破棁E��ますか�E�E)) return
+            if (isDirty && !await confirm('保存されていない変更があります。破棄しますか？')) return
             onBack()
           }} className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1">
-            ↁE<span className="hidden sm:inline">カレンダー</span>
+            ←<span className="hidden sm:inline">カレンダー</span>
             </button>
           <span className="text-xs text-gray-400 hidden sm:inline">|</span>
           <span className="text-xs text-gray-500 hidden sm:inline">{dateLabel}</span>
@@ -387,10 +380,9 @@ function DiaryEditor({
               activeTab === 'view'
                 ? 'bg-blue-100 text-blue-700 font-bold'
                 : 'text-gray-400 hover:text-gray-600'
-
             }`}
           >
-            阁E��页面
+            閲覧ページ
           </button>
           <span className="text-gray-300 select-none">|</span>
           <button
@@ -401,7 +393,7 @@ function DiaryEditor({
                 : 'text-gray-400 hover:text-gray-600'
             }`}
           >
-            编辑页面
+            編集ページ
           </button>
         </div>
 
@@ -417,7 +409,7 @@ function DiaryEditor({
                 disabled={isSaving}
                 className="px-4 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {isSaving ? '💾 保存中...' : '💾 保孁E}
+                {isSaving ? '💾 保存中...' : '💾 保存'}
               </button>
             </>
           ) : (
@@ -426,7 +418,7 @@ function DiaryEditor({
               disabled={isCorrectionLoading || isSaving || !text.trim()}
               className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {isCorrectionLoading ? '✨ チェチE��中...' : '✨ AI删改'}
+              {isCorrectionLoading ? '✨ チェック中...' : '✨ AI添削'}
             </button>
           )}
         </div>
@@ -445,7 +437,7 @@ function DiaryEditor({
               className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 overflow-x-auto min-h-[56px] rounded-t-xl"
             >
               {images.length === 0 && (
-                <span className="text-xs text-gray-400 whitespace-nowrap">🖼�E�E画像をドロチE�E or ペ�EスチE/span>
+                <span className="text-xs text-gray-400 whitespace-nowrap">🖼 画像をドロップ or ペースト</span>
               )}
               {images.map((img, i) => (
                 <div key={i} className="relative group shrink-0">
@@ -454,7 +446,8 @@ function DiaryEditor({
                     onClick={() => removeImage(i)}
                     className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   >
-                    ÁE                  </button>
+                    ×
+                  </button>
                 </div>
               ))}
               <button
@@ -493,7 +486,7 @@ function DiaryEditor({
               <div className="relative" ref={headingRef}>
                 <button
                   onMouseDown={(e) => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setHeadingPickerPos(p => p ? null : { top: r.bottom + 4, left: r.left }) }}
-                  title="見�EぁE
+                  title="見出し"
                   className="px-2 py-1 text-xs font-mono text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
                 >
                   H ▾
@@ -520,7 +513,7 @@ function DiaryEditor({
               <div className="relative" ref={templateRef}>
                 <button
                   onMouseDown={(e) => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setTemplatePickerPos(p => p ? null : { top: r.bottom + 4, left: r.left }) }}
-                  title="チE��プレーチE
+                  title="テンプレート"
                   className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors whitespace-nowrap"
                 >
                   📋 ▾
@@ -544,7 +537,8 @@ function DiaryEditor({
                       onMouseDown={(e) => { e.preventDefault(); setTemplatePickerPos(null); openTemplateManager() }}
                       className="block w-full px-3 py-1.5 text-xs text-left text-blue-600 hover:bg-blue-50 font-medium"
                     >
-                      ✏︁EチE��プレート管琁E                    </button>
+                      ✏️ テンプレート管理
+                    </button>
                   </div>
                 )}
               </div>
@@ -576,19 +570,20 @@ function DiaryEditor({
             {/* No text state */}
             {!text.trim() && !showCorrection && (
               <div className="flex flex-col items-center justify-center h-full text-center">
-                <p className="text-sm text-gray-400 mb-4">まだ日記を書ぁE��ぁE��せん</p>
+                <p className="text-sm text-gray-400 mb-4">まだ日記を書いていません</p>
                 <button
                   onClick={handleGoToEdit}
                   className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  ✏︁E编辑すめE                </button>
+                  ✏️ 編集する
+                </button>
               </div>
             )}
 
             {/* Original text display */}
             {text.trim() && !showCorrection && (
               <div>
-                <h3 className="text-sm font-bold text-gray-700 mb-2">📝 あなた�E日訁E/h3>
+                <h3 className="text-sm font-bold text-gray-700 mb-2">📝 あなたの日記</h3>
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg markdown-preview">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
                     {text}
@@ -600,7 +595,7 @@ function DiaryEditor({
             {/* Loading */}
             {isCorrectionLoading && (
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-600">AI先生がチェチE��中...</p>
+                <p className="text-sm text-blue-600">AI先生がチェック中...</p>
               </div>
             )}
 
@@ -616,7 +611,7 @@ function DiaryEditor({
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-700 mb-2">📝 あなた�E日訁E/h3>
+                    <h3 className="text-sm font-bold text-gray-700 mb-2">📝 あなたの日記</h3>
                     <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg markdown-preview">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
                         {text}
@@ -624,7 +619,7 @@ function DiaryEditor({
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-gray-700 mb-2">◁E修正斁E/h3>
+                    <h3 className="text-sm font-bold text-gray-700 mb-2">✅ 修正後</h3>
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg markdown-preview">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
                         {correctedText}
@@ -633,12 +628,12 @@ function DiaryEditor({
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-700 mb-3">◁E差刁E/h3>
+                  <h3 className="text-sm font-bold text-gray-700 mb-3">🔍 差異</h3>
                   <DiffView original={text} corrected={correctedText} />
                 </div>
                 {aiAdvice && (
                   <div>
-                    <h3 className="text-sm font-bold text-gray-700 mb-3">◁E先生からのアドバイス</h3>
+                    <h3 className="text-sm font-bold text-gray-700 mb-3">💡 先生からのアドバイス</h3>
                     <div className="p-4 bg-green-50 border border-green-200 rounded-lg markdown-preview">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
                         {aiAdvice}
@@ -653,7 +648,8 @@ function DiaryEditor({
             {text.trim() && !showCorrection && !isCorrectionLoading && (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-700">
-                  AI添削をまだ実行してぁE��せん。「AI添削」�EタンをクリチE��すると、AIがあなた�E日記をチェチE��します、E                </p>
+                  AI添削をまだ実行していません。「AI添削」ボタンをクリックすると、AIがあなたの日記をチェックします。
+                </p>
               </div>
             )}
           </div>
@@ -664,7 +660,7 @@ function DiaryEditor({
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowTemplateManager(false)}>
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 shrink-0">
-              <h3 className="text-sm font-bold text-gray-800">✏︁EチE��プレート管琁E/h3>
+              <h3 className="text-sm font-bold text-gray-800">✏️ テンプレート管理</h3>
               <button onClick={() => setShowTemplateManager(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
@@ -678,7 +674,8 @@ function DiaryEditor({
                     onClick={() => { setEditingTemplate(t); setEditLabel(t.label); setEditContent(t.content); }}
                     className="px-2 py-1 text-xs text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded shrink-0"
                   >
-                    編雁E                  </button>
+                    編集
+                  </button>
                   <button
                     onClick={() => handleDeleteTemplate(t.id)}
                     className="px-2 py-1 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded shrink-0"
@@ -688,17 +685,17 @@ function DiaryEditor({
                 </div>
               ))}
               <div className="border-t border-gray-100 pt-3 space-y-2">
-                <h4 className="text-xs font-bold text-gray-600">{editingTemplate ? 'チE��プレートを編雁E : '新規テンプレーチE}</h4>
+                <h4 className="text-xs font-bold text-gray-600">{editingTemplate ? 'テンプレートを編集' : '新規テンプレート'}</h4>
                 <input
                   value={editLabel}
                   onChange={e => setEditLabel(e.target.value)}
-                  placeholder="チE��プレート名"
+                  placeholder="テンプレート名"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
                 <textarea
                   value={editContent}
                   onChange={e => setEditContent(e.target.value)}
-                  placeholder="チE��プレート�E容�E�Earkdown�E�E
+                  placeholder="テンプレート内容（Markdown）"
                   rows={4}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
                 />
@@ -733,7 +730,7 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
   const [confirm, ConfirmModal] = useConfirm()
 
   const monthStr = format(diaryMonth, 'yyyy-MM')
-  const monthLabel = format(diaryMonth, 'yyyy年 M朁E, { locale: ja })
+  const monthLabel = format(diaryMonth, 'yyyy年 M月', { locale: ja })
   const today = new Date()
 
   const entriesByDate = useMemo(() => {
@@ -769,7 +766,7 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
         setSelectedDate(ds)
         setViewMode('editor')
       } else if (isToday(dateObj)) {
-        if (await confirm('今日の日本語日記がまだ書かれてぁE��せん。今すぐ書きますか�E�E)) {
+        if (await confirm('今日の日本語日記がまだ書かれていません。今すぐ書きますか？')) {
           setSelectedDate(ds)
           setViewMode('editor')
         }
@@ -811,7 +808,7 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-gray-800">📝 日本語日訁E/h2>
+        <h2 className="text-lg font-bold text-gray-800">📝 日本語日記</h2>
         <div className="flex items-center gap-1">
           <button onClick={handlePrevMonth} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded">&lt;</button>
           <span className="text-xs text-gray-400 mx-1 min-w-[7rem] text-center">{monthLabel}</span>
@@ -821,8 +818,10 @@ export function DiaryView({ entries, onSave, onUpdate, onModeChange }: DiaryView
       </div>
 
       <div className="mb-3 text-xs text-gray-500">
-        今月の継続率�E�E        <span className="font-bold text-gray-700">{rate}%</span>
-        {' '}�E�EwrittenCount}日/{pastDays}日�E�E      </div>
+        今月の継続率：
+        <span className="font-bold text-gray-700">{rate}%</span>
+        {' '}（{writtenCount}日/{pastDays}日）
+      </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="grid grid-cols-7 mb-1">

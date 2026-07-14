@@ -1,0 +1,5 @@
+export { default as CategoryApp } from './App'
+export { CategoryManagerPage } from './components/CategoryManagerPage'
+export { CategoryCombobox } from './components/CategoryCombobox'
+export { IconPicker } from './components/IconPicker'
+export { CatIcon } from './components/Icon'

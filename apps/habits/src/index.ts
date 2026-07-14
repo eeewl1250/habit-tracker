@@ -1,0 +1,23 @@
+export { default as HabitsApp } from './App'
+
+export { useTasks } from './hooks/useTasks'
+export { useLogs } from './hooks/useLogs'
+export { useViewDates } from './hooks/useViewDates'
+export { useToast } from './hooks/useToast'
+export { useNoteFlow } from './hooks/useNoteFlow'
+
+export { MatrixView } from './components/MatrixView'
+export { MobileView } from './components/MobileView'
+export { HeatmapView } from './components/HeatmapView'
+export { StatsView } from './components/StatsView'
+export { NotesView } from './components/NotesView'
+export { TaskForm } from './components/TaskForm'
+export { ManagementPage } from './components/ManagementPage'
+export { NoteModal } from './components/NoteModal'
+export { Header } from './components/Header'
+export { Toast } from './components/Toast'
+export { ManagementPage as CategoryManagerPage } from './components/ManagementPage'
+export { CategoryManager } from './components/CategoryManager'
+export { HomeView } from './components/HomeView'
+
+export { fetchCategories, fetchCategoryDefinitions, seedDefaultCategories } from './lib/api'
