@@ -496,12 +496,29 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
 
               const fmtTimeAvg = (min: number | null) => min == null ? '--:--' : `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
               const fmtDurAvg = (min: number | null) => min == null ? '-' : `${Math.round(min / 6) / 10}h`
-              const diff = (cur: number | null, prev: number | null, unit: string, invert?: boolean) => {
+              const diffBedtime = (cur: number | null, prev: number | null) => {
+                if (cur == null || prev == null) return null
+                let d = Math.round(cur - prev)
+                if (d > 720) d -= 1440
+                if (d < -720) d += 1440
+                if (d === 0) return <span className="text-slate-500">→ 同じ</span>
+                const bad = d > 0
+                return <span className={bad ? 'text-red-400' : 'text-emerald-400'}>{d > 0 ? '+' : ''}{d}分</span>
+              }
+              const diffDuration = (cur: number | null, prev: number | null) => {
+                if (cur == null || prev == null) return null
+                const dMin = Math.round(cur - prev)
+                const dH = Math.round(dMin / 6 * 10) / 10
+                if (dH === 0) return <span className="text-slate-500">→ 同じ</span>
+                const bad = dH < 0
+                return <span className={bad ? 'text-red-400' : 'text-emerald-400'}>{dH > 0 ? '+' : ''}{dH}h</span>
+              }
+              const diffLatency = (cur: number | null, prev: number | null) => {
                 if (cur == null || prev == null) return null
                 const d = Math.round(cur - prev)
                 if (d === 0) return <span className="text-slate-500">→ 同じ</span>
-                const bad = invert ? d < 0 : d > 0
-                return <span className={bad ? 'text-red-400' : 'text-emerald-400'}>{d > 0 ? '+' : ''}{d}{unit}</span>
+                const bad = d > 0
+                return <span className={bad ? 'text-red-400' : 'text-emerald-400'}>{d > 0 ? '+' : ''}{d}分</span>
               }
 
               return (
@@ -509,17 +526,17 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
                   <div className="bg-slate-800 rounded-xl p-4">
                     <div className="text-xs text-slate-400 mb-1">平均入眠時間</div>
                     <div className="text-lg font-bold">{fmtTimeAvg(curBed)}</div>
-                    <div className="text-[10px] mt-1">{diff(curBed, prevBed, '分')}</div>
+                    <div className="text-[10px] mt-1">{diffBedtime(curBed, prevBed)}</div>
                   </div>
                   <div className="bg-slate-800 rounded-xl p-4">
                     <div className="text-xs text-slate-400 mb-1">平均睡眠時間</div>
                     <div className="text-lg font-bold">{fmtDurAvg(curDur)}</div>
-                    <div className="text-[10px] mt-1">{diff(curDur, prevDur, 'h', true)}</div>
+                    <div className="text-[10px] mt-1">{diffDuration(curDur, prevDur)}</div>
                   </div>
                   <div className="bg-slate-800 rounded-xl p-4">
                     <div className="text-xs text-slate-400 mb-1">平均入眠潜時</div>
                     <div className="text-lg font-bold">{curLat != null ? `${curLat}分` : '-'}</div>
-                    <div className="text-[10px] mt-1">{diff(curLat, prevLat, '分', true)}</div>
+                    <div className="text-[10px] mt-1">{diffLatency(curLat, prevLat)}</div>
                   </div>
                 </>
               )
