@@ -529,20 +529,26 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
 
               return (
                 <>
-                  <div className="bg-slate-800 rounded-xl p-4">
-                    <div className="text-xs text-slate-400 mb-1">平均入眠時間</div>
-                    <div className="text-lg font-bold">{fmtTimeAvg(curBed)}</div>
-                    <div className="text-[10px] mt-1">{diffBedtime(curBed, prevBed)}</div>
+                  <div className="bg-slate-800 rounded-xl p-4 flex justify-between items-center">
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">平均入眠時間</div>
+                      <div className="text-lg font-bold">{fmtTimeAvg(curBed)}</div>
+                    </div>
+                    <div className="text-[10px]">{diffBedtime(curBed, prevBed)}</div>
                   </div>
-                  <div className="bg-slate-800 rounded-xl p-4">
-                    <div className="text-xs text-slate-400 mb-1">平均睡眠時間</div>
-                    <div className="text-lg font-bold">{fmtDurAvg(curDur)}</div>
-                    <div className="text-[10px] mt-1">{diffDuration(curDur, prevDur)}</div>
+                  <div className="bg-slate-800 rounded-xl p-4 flex justify-between items-center">
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">平均睡眠時間</div>
+                      <div className="text-lg font-bold">{fmtDurAvg(curDur)}</div>
+                    </div>
+                    <div className="text-[10px]">{diffDuration(curDur, prevDur)}</div>
                   </div>
-                  <div className="bg-slate-800 rounded-xl p-4">
-                    <div className="text-xs text-slate-400 mb-1">平均入眠潜時</div>
-                    <div className="text-lg font-bold">{curLat != null ? `${curLat}分` : '-'}</div>
-                    <div className="text-[10px] mt-1">{diffLatency(curLat, prevLat)}</div>
+                  <div className="bg-slate-800 rounded-xl p-4 flex justify-between items-center">
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">平均入眠潜時</div>
+                      <div className="text-lg font-bold">{curLat != null ? `${curLat}分` : '-'}</div>
+                    </div>
+                    <div className="text-[10px]">{diffLatency(curLat, prevLat)}</div>
                   </div>
                 </>
               )
