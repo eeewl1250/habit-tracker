@@ -14,7 +14,12 @@ const appDirs = readdirSync(appsDir, { withFileTypes: true })
 for (const app of appDirs) {
   const appDist = join(appsDir, app.name, 'dist')
   if (!existsSync(appDist)) continue
-  cpSync(appDist, join(dist, 'apps', app.name), { recursive: true })
+
+  if (app.name === 'portal') {
+    cpSync(appDist, dist, { recursive: true })
+  } else {
+    cpSync(appDist, join(dist, 'apps', app.name), { recursive: true })
+  }
 }
 
 if (existsSync(publicDir)) {
