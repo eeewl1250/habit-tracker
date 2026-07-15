@@ -18,7 +18,7 @@ for (const app of appDirs) {
   if (app.name === 'portal') {
     cpSync(appDist, dist, { recursive: true })
   } else {
-    cpSync(appDist, join(dist, 'apps', app.name), { recursive: true })
+    cpSync(appDist, join(dist, app.name), { recursive: true })
   }
 }
 
