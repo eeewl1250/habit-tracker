@@ -470,7 +470,13 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
               const avgBedtime = (logs: typeof sleepLogs) => {
                 const w = logs.filter((l) => l.sleep_time)
                 if (w.length === 0) return null
-                return Math.round(w.reduce((s, l) => s + parseISO(l.sleep_time!).getHours() * 60 + parseISO(l.sleep_time!).getMinutes(), 0) / w.length)
+                const ref = 1080
+                const normalized = w.map((l) => {
+                  const m = parseISO(l.sleep_time!).getHours() * 60 + parseISO(l.sleep_time!).getMinutes()
+                  return m < ref ? m + 1440 : m
+                })
+                const avg = Math.round(normalized.reduce((s, m) => s + m, 0) / normalized.length)
+                return avg % 1440
               }
               const avgDuration = (logs: typeof sleepLogs) => {
                 const w = logs.filter((l) => l.sleep_time && l.wake_time)
