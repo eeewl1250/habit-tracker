@@ -6,4 +6,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: { host: '127.0.0.1', port: 3009 },
   envDir: '../../',
+  base: '/category/',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
 })

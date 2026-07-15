@@ -6,4 +6,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: { host: '127.0.0.1', port: 3002 },
   envDir: '../../',
+  base: '/finance/',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
 })

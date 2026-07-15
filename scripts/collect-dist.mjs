@@ -24,6 +24,21 @@ for (const app of appDirs) {
 
 if (existsSync(publicDir)) {
   cpSync(publicDir, dist, { recursive: true })
+  for (const app of appDirs) {
+    if (app.name !== 'portal') {
+      const appOut = join(dist, app.name)
+      if (existsSync(appOut)) {
+        const redirectsSrc = join(publicDir, '_redirects')
+        if (existsSync(redirectsSrc)) {
+          cpSync(redirectsSrc, join(appOut, '_redirects'))
+        }
+        const headersSrc = join(publicDir, '_headers')
+        if (existsSync(headersSrc)) {
+          cpSync(headersSrc, join(appOut, '_headers'))
+        }
+      }
+    }
+  }
 }
 
 console.log(`✓ Collected dist from ${appDirs.length} apps into /dist`)
