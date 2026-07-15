@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "build:pages": "vite build",
+    "build:pages": "turbo build && node scripts/collect-dist.mjs",
     "lint": "turbo lint",
     "preview": "turbo preview"
   },
