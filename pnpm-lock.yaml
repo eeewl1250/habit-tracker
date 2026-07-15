@@ -280,53 +280,7 @@ importers:
         version: 8.1.4(jiti@2.7.0)
 
   apps/portal:
-    dependencies:
-      '@habit-tracker/category':
-        specifier: workspace:*
-        version: link:../category
-      '@habit-tracker/craving':
-        specifier: workspace:*
-        version: link:../craving
-      '@habit-tracker/diary':
-        specifier: workspace:*
-        version: link:../diary
-      '@habit-tracker/finance':
-        specifier: workspace:*
-        version: link:../finance
-      '@habit-tracker/habits':
-        specifier: workspace:*
-        version: link:../habits
-      '@habit-tracker/menstruation':
-        specifier: workspace:*
-        version: link:../menstruation
-      '@habit-tracker/review':
-        specifier: workspace:*
-        version: link:../review
-      '@habit-tracker/schedule':
-        specifier: workspace:*
-        version: link:../schedule
-      '@habit-tracker/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@habit-tracker/sleep':
-        specifier: workspace:*
-        version: link:../sleep
-      '@habit-tracker/todo':
-        specifier: workspace:*
-        version: link:../todo
-      date-fns:
-        specifier: ^4.1.0
-        version: 4.4.0
-      react:
-        specifier: ^19.1.0
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@tailwindcss/vite':
-        specifier: ^4.1.7
-        version: 4.3.2(vite@8.1.4(jiti@2.7.0))
       '@types/react':
         specifier: ^19.1.4
         version: 19.2.17

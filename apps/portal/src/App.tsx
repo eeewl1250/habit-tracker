@@ -28,6 +28,7 @@ function App() {
             <a
               key={app.name}
               href={`http://${baseHost}:${app.port}`}
+              target="_blank"
               className={`flex flex-col items-center gap-1 p-5 rounded-xl border transition-all hover:shadow-md active:scale-95 text-center ${
                 app.primary
                   ? 'bg-blue-50 border-blue-200 hover:border-blue-400'
