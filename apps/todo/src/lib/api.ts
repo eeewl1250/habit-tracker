@@ -147,6 +147,57 @@ export async function deleteTimeLog(id: string): Promise<void> {
 
 // ── Schedules (read-only) ──
 
+function expandRecurring(schedule: Schedule): Schedule[] {
+  const excludedDates: string[] = JSON.parse(schedule.excluded_dates || '[]')
+
+  if (!schedule.is_recurring) {
+    if (excludedDates.includes(schedule.date_start)) return []
+    return [schedule]
+  }
+
+  const unit = schedule.rec_unit
+  const interval = schedule.rec_interval ?? 1
+  const recDays: string[] = schedule.rec_days ? JSON.parse(schedule.rec_days) : []
+  const endDate = schedule.rec_end_date ?? '2099-12-31'
+  const start = new Date(schedule.date_start + 'T00:00:00')
+  const end = new Date(endDate + 'T00:00:00')
+
+  const instances: Schedule[] = []
+  const current = new Date(start)
+
+  while (current <= end) {
+    const y = current.getFullYear()
+    const m = String(current.getMonth() + 1).padStart(2, '0')
+    const d = String(current.getDate()).padStart(2, '0')
+    const dateStr = `${y}-${m}-${d}`
+
+    if (!excludedDates.includes(dateStr)) {
+      let matches = true
+
+      if (unit === 'month') {
+        if (current.getDate() !== start.getDate()) matches = false
+      } else if (unit === 'week') {
+        if (recDays.length > 0) {
+          const dayOfWeek = ((current.getDay() + 6) % 7).toString()
+          if (!recDays.includes(dayOfWeek)) matches = false
+        }
+      }
+
+      if (matches) {
+        instances.push({
+          ...schedule,
+          date_start: dateStr,
+          is_recurring: false,
+        })
+      }
+    }
+
+    current.setDate(current.getDate() + 1)
+  }
+
+  return instances
+}
+
 export async function fetchSchedules(): Promise<Schedule[]> {
   const { data, error } = await sb()
     .from('schedules')
@@ -154,7 +205,8 @@ export async function fetchSchedules(): Promise<Schedule[]> {
     .order('date_start', { ascending: true })
     .order('time_start', { ascending: true, nullsFirst: true })
   if (error) throw error
-  return data ?? []
+  const raw = data ?? []
+  return raw.flatMap(expandRecurring)
 }
 
 // ── Todos ──
