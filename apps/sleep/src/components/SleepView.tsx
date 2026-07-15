@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
-import { format, parseISO, differenceInMinutes, getHours, getMinutes, subDays, addDays } from 'date-fns'
+import { format, parseISO, differenceInMinutes, getHours, getMinutes, subDays, addDays, subMonths } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import type { SleepLog } from '../types'
 
@@ -459,41 +459,71 @@ export function SleepView({ sleepLogs, days, onRecordSleep2Time, onRecordWake2Ti
       {/* ── PC: Grid + modal ── */}
       <div className="hidden md:block p-4 md:p-6">
         <div className="max-w-6xl mx-auto">
-          {/* Metrics */}
+          {/* Metrics - Monthly */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-slate-800 rounded-xl p-4">
-              <div className="text-xs text-slate-400 mb-1">平均入眠時間</div>
-              {(() => {
-                const w = sleepLogs.filter((l) => l.sleep_time)
-                if (w.length === 0) return <div className="text-lg font-bold">--:--</div>
-                const avg = Math.round(w.reduce((s, l) => s + parseISO(l.sleep_time!).getHours() * 60 + parseISO(l.sleep_time!).getMinutes(), 0) / w.length)
-                return <div className="text-lg font-bold">{String(Math.floor(avg / 60)).padStart(2, '0')}:{String(avg % 60).padStart(2, '0')}</div>
-              })()}
-            </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <div className="text-xs text-slate-400 mb-1">平均睡眠時間</div>
-              {(() => {
-                const w = sleepLogs.filter((l) => l.sleep_time && l.wake_time)
-                if (w.length === 0) return <div className="text-lg font-bold">-</div>
-                const avg = w.reduce((s, l) => {
+            {(() => {
+              const monthStr = format(days[0], 'yyyy-MM')
+              const prevMonthStr = format(subMonths(days[0], 1), 'yyyy-MM')
+              const curLogs = sleepLogs.filter((l) => l.date.startsWith(monthStr))
+              const prevLogs = sleepLogs.filter((l) => l.date.startsWith(prevMonthStr))
+
+              const avgBedtime = (logs: typeof sleepLogs) => {
+                const w = logs.filter((l) => l.sleep_time)
+                if (w.length === 0) return null
+                return Math.round(w.reduce((s, l) => s + parseISO(l.sleep_time!).getHours() * 60 + parseISO(l.sleep_time!).getMinutes(), 0) / w.length)
+              }
+              const avgDuration = (logs: typeof sleepLogs) => {
+                const w = logs.filter((l) => l.sleep_time && l.wake_time)
+                if (w.length === 0) return null
+                return w.reduce((s, l) => {
                   let total = differenceInMinutes(parseISO(l.wake_time!), parseISO(l.sleep_time!))
-                  if (l.sleep2_time && l.wake2_time) {
-                    total += differenceInMinutes(parseISO(l.wake2_time), parseISO(l.sleep2_time))
-                  }
+                  if (l.sleep2_time && l.wake2_time) total += differenceInMinutes(parseISO(l.wake2_time), parseISO(l.sleep2_time))
                   return s + total
                 }, 0) / w.length
-                return <div className="text-lg font-bold">{Math.round(avg / 6) / 10}h</div>
-              })()}
-            </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <div className="text-xs text-slate-400 mb-1">平均入眠潜時</div>
-              {(() => {
-                const w = sleepLogs.filter((l) => l.bed_time && l.sleep_time)
-                if (w.length === 0) return <div className="text-lg font-bold">-</div>
-                const avg = w.reduce((s, l) => s + differenceInMinutes(parseISO(l.sleep_time!), parseISO(l.bed_time!)), 0) / w.length
-                return <div className="text-lg font-bold">{Math.round(avg)}分</div>
-              })()}
-            </div>
+              }
+              const avgLatency = (logs: typeof sleepLogs) => {
+                const w = logs.filter((l) => l.bed_time && l.sleep_time)
+                if (w.length === 0) return null
+                return Math.round(w.reduce((s, l) => s + differenceInMinutes(parseISO(l.sleep_time!), parseISO(l.bed_time!)), 0) / w.length)
+              }
+
+              const curBed = avgBedtime(curLogs)
+              const prevBed = avgBedtime(prevLogs)
+              const curDur = avgDuration(curLogs)
+              const prevDur = avgDuration(prevLogs)
+              const curLat = avgLatency(curLogs)
+              const prevLat = avgLatency(prevLogs)
+
+              const fmtTimeAvg = (min: number | null) => min == null ? '--:--' : `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
+              const fmtDurAvg = (min: number | null) => min == null ? '-' : `${Math.round(min / 6) / 10}h`
+              const diff = (cur: number | null, prev: number | null, unit: string, invert?: boolean) => {
+                if (cur == null || prev == null) return null
+                const d = Math.round(cur - prev)
+                if (d === 0) return <span className="text-slate-500">→ 同じ</span>
+                const bad = invert ? d < 0 : d > 0
+                return <span className={bad ? 'text-red-400' : 'text-emerald-400'}>{d > 0 ? '+' : ''}{d}{unit}</span>
+              }
+
+              return (
+                <>
+                  <div className="bg-slate-800 rounded-xl p-4">
+                    <div className="text-xs text-slate-400 mb-1">平均入眠時間</div>
+                    <div className="text-lg font-bold">{fmtTimeAvg(curBed)}</div>
+                    <div className="text-[10px] mt-1">{diff(curBed, prevBed, '分')}</div>
+                  </div>
+                  <div className="bg-slate-800 rounded-xl p-4">
+                    <div className="text-xs text-slate-400 mb-1">平均睡眠時間</div>
+                    <div className="text-lg font-bold">{fmtDurAvg(curDur)}</div>
+                    <div className="text-[10px] mt-1">{diff(curDur, prevDur, 'h', true)}</div>
+                  </div>
+                  <div className="bg-slate-800 rounded-xl p-4">
+                    <div className="text-xs text-slate-400 mb-1">平均入眠潜時</div>
+                    <div className="text-lg font-bold">{curLat != null ? `${curLat}分` : '-'}</div>
+                    <div className="text-[10px] mt-1">{diff(curLat, prevLat, '分', true)}</div>
+                  </div>
+                </>
+              )
+            })()}
           </div>
 
           {/* Grid */}
